@@ -1,8 +1,8 @@
-import { addDBToPool, getRepository } from "../Repository";
-import { Article } from "./entity/Article";
-import { User } from "./entity/User";
 import * as admin from 'firebase-admin';
-import { columnSettings } from "../Entity";
+import { addDBToPool, getRepository, runTransaction, use } from "../Repository";
+import { User } from "./entity/User";
+import { ArticleStat } from "./entity/ArticleStat";
+import { Article } from './entity/Article';
 
 (async () => {
     const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
@@ -14,19 +14,27 @@ import { columnSettings } from "../Entity";
     const db = admin.firestore();
 
     addDBToPool('default', db);
+    use('default');
 
     const user = await getRepository(User).prepareFetcher(db => {
-        return db.doc("1");
-    }).fetchOne();
+        return db.where('name', '==', 'noppoman');
+    }).fetchOne({relations: ['articles.category', 'articles.stat']});
     console.log(user);
 
-    const users = await getRepository(User).prepareFetcher(db => {
-        return db;
-    }).fetchAll();
+    const stat = await getRepository(ArticleStat).prepareFetcher(db => {
+        return db.doc("1");
+    }).fetchOne({relations: ['article.category']});
+    console.log(stat);
+
+    const article = await getRepository(Article).fetchOneById("1", {relations: ['category']});
+    console.log(article);
+
+    const users = await getRepository(User).fetchAll({relations: ['articles']});
     console.log(users);
 
-    const article = await getRepository(Article).prepareFetcher(db => {
-        return db.doc("1");
-    }).fetchOne({relations: ['user']});
-    console.log(article);
+    await runTransaction(async manager => {
+        const article = new Article();
+        console.log(article);
+        // manager.getRepository(Article);
+    });
 })();

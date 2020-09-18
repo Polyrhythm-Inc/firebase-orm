@@ -2,7 +2,7 @@ export declare type ClassType<T> = {
     new (...args: any[]): T;
 };
 
-interface ColumnSetting {
+export interface ColumnSetting {
     propertyKey: string;
     option?: {name: string};
 }
@@ -16,15 +16,15 @@ export class _ColumnSetting implements ColumnSetting {
 }
 
 export class _OneToManySetting<T> implements ColumnSetting {
-    constructor(public propertyKey: string, public Entity: ClassType<T>) {}
+    constructor(public propertyKey: string, public getEntity: () => ClassType<T>) {}
 }
 
 export class _OneToOneSetting<T> implements ColumnSetting {
-    constructor(public propertyKey: string, public Entity: ClassType<T>, public option?: RelationOption) {}
+    constructor(public propertyKey: string, public getEntity: () => ClassType<T>, public option?: RelationOption & {joinColumnName: string}) {}
 }
 
 export class _ManyToOneSetting<T> implements ColumnSetting {
-    constructor(public propertyKey: string, public Entity: ClassType<T>, public option?: RelationOption) {}
+    constructor(public propertyKey: string, public getEntity: () => ClassType<T>, public option?: RelationOption & {joinColumnName: string}) {}
 }
 
 export class _CreateDateColumnSetting<T> implements ColumnSetting {
@@ -37,29 +37,41 @@ export class _UpdateDateColumnSetting<T> implements ColumnSetting {
 
 export type EntityMetaInfo = {
     tableName: string;
-    constructor: Function;
+    Entity: Function;
 }
 
-export type EntityColumn = {
-    constructor: Function;
-    columnSettings: ColumnSetting[];
+export type EntityColumnInfo = {
+    columns: ColumnSetting[];
 }
 
-export type ColumnMetaData = EntityMetaInfo & EntityColumn;
+export type EntityMetaData = EntityMetaInfo & EntityColumnInfo;
 
-export const entityMetaInfo: EntityMetaInfo[] = [];
-export const columnSettings: EntityColumn[] = [];
+const entityMetaInfo: EntityMetaInfo[] = [];
+const columnSettings: {getEntity: () => Function, column: ColumnSetting}[] = [];
+const entityMetaData: {[key: string]: any} = {};
 
-function addColumnSettings(constructor: Function, setting: ColumnSetting) {
-    const meta = columnSettings.filter(x => x.constructor == constructor)[0];
-    if(meta) {
-        meta.columnSettings.push(setting);
-    } else {
-        columnSettings.push({
-            constructor: constructor,
-            columnSettings: [setting]
-        });
+export function findMeta(Entity: Function) {
+    if(entityMetaData[Entity.name]) {
+        return entityMetaData[Entity.name];
     }
+
+    const tableInfo = entityMetaInfo.filter(x => x.Entity == Entity)[0];
+    const setting = columnSettings.map(x => {
+        return {
+            column: x.column,
+            Entity: x.getEntity()
+        }
+    }).filter(x => x.Entity == Entity);
+
+    entityMetaData[Entity.name] = {...tableInfo, ...{columns: setting.map(x => x.column)}};
+    return entityMetaData[Entity.name];
+}
+
+function addColumnSettings(getEntity: () => Function, setting: ColumnSetting) {
+    columnSettings.push({
+        getEntity: getEntity,
+        column: setting
+    });
 }
 
 export type ColumOption = {
@@ -76,43 +88,43 @@ export type DateOption = {
 
 export function PrimaryColumn() {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _PrimaryColumnSetting(propertyKey));
+        addColumnSettings(() => target.constructor, new _PrimaryColumnSetting(propertyKey));
     }
 }
 
 export function Column(options?: ColumOption) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _ColumnSetting(propertyKey, options));
+        addColumnSettings(() => target.constructor, new _ColumnSetting(propertyKey, options));
     }
 }
 
-export function OneToMany<T>(Entity: ClassType<T>) {
+export function OneToMany<T>(getEntity: () => ClassType<T>) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _OneToManySetting(propertyKey, Entity));
+        addColumnSettings(() => target.constructor, new _OneToManySetting(propertyKey, getEntity));
     }
 }
 
-export function OneToOne<T>(Entity: ClassType<T>, options?: RelationOption) {
+export function OneToOne<T>(getEntity: () => ClassType<T>, options?: {joinColumnName: string}) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _OneToOneSetting(propertyKey, Entity, options));
+        addColumnSettings(() => target.constructor, new _OneToOneSetting(propertyKey, getEntity, options as any));
     }
 }
 
-export function ManyToOne<T>(Entity: ClassType<T>, options?: RelationOption) {
+export function ManyToOne<T>(getEntity: () => ClassType<T>, options?: {joinColumnName: string}) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _ManyToOneSetting(propertyKey, Entity, options));
+        addColumnSettings(() => target.constructor, new _ManyToOneSetting(propertyKey, getEntity, options as any));
     }
 }
 
 export function CreateDateColumn<T>(options?: DateOption) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _CreateDateColumnSetting(propertyKey));
+        addColumnSettings(() => target.constructor, new _CreateDateColumnSetting(propertyKey));
     }
 }
 
 export function UpdateDateColumn<T>(options?: DateOption) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(target.constructor, new _UpdateDateColumnSetting(propertyKey));
+        addColumnSettings(() => target.constructor, new _UpdateDateColumnSetting(propertyKey));
     }
 }
 
@@ -120,7 +132,7 @@ export function FirebaseEntity(tableName: string) {
     return (constructor: Function) => {
         entityMetaInfo.push({
             tableName: tableName,
-            constructor: constructor
+            Entity: constructor
         });
     }
 }
