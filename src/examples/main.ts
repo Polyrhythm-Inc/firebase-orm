@@ -1,5 +1,5 @@
 import * as admin from 'firebase-admin';
-import { addDBToPool, getRepository, runTransaction, use } from "../Repository";
+import { addDBToPool, getCurrentDB, getRepository, runTransaction, use } from "../Repository";
 import { User } from "./entity/User";
 import { ArticleStat } from "./entity/ArticleStat";
 import { Article } from './entity/Article';
@@ -17,24 +17,39 @@ import { Article } from './entity/Article';
     use('default');
 
     const user = await getRepository(User).prepareFetcher(db => {
-        return db.where('name', '==', 'noppoman');
+        return db.where('name', '==', 'たけちゃん');
     }).fetchOne({relations: ['articles.category', 'articles.stat']});
     console.log(user);
 
-    const stat = await getRepository(ArticleStat).prepareFetcher(db => {
-        return db.doc("1");
-    }).fetchOne({relations: ['article.category']});
-    console.log(stat);
-
-    const article = await getRepository(Article).fetchOneById("1", {relations: ['category']});
-    console.log(article);
-
-    const users = await getRepository(User).fetchAll({relations: ['articles']});
-    console.log(users);
-
+    // トランザクション新規
     await runTransaction(async manager => {
+        const user = new User();
+        user.id = '3';
+        user.name = 'foo';
+        await manager.getRepository(User).save(user);
+    
         const article = new Article();
-        console.log(article);
-        // manager.getRepository(Article);
+        article.id = '3';
+        article.title = 'title';
+        article.contentText = 'bodybody';
+        article.user = user;
+        await manager.getRepository(Article).save(article);
+    });
+
+    // トランザクション更新
+    await runTransaction(async manager => {
+        const user = await manager.getRepository(User).prepareFetcher(db => {
+            return db.doc('1');
+        }).fetchOne({relations: ['articles']});
+
+        if(!user) {
+            return;
+        }
+        user.name = 'noppoman2';
+        await manager.save(user);
+
+        const article = user.articles[0];
+        article.title = '更新しました';
+        await manager.save(article);
     });
 })();

@@ -48,7 +48,7 @@ export type EntityMetaData = EntityMetaInfo & EntityColumnInfo;
 
 const entityMetaInfo: EntityMetaInfo[] = [];
 const columnSettings: {getEntity: () => Function, column: ColumnSetting}[] = [];
-const entityMetaData: {[key: string]: any} = {};
+const entityMetaData: {[key: string]: EntityMetaInfo & EntityColumnInfo} = {};
 
 export function findMeta(Entity: Function) {
     if(entityMetaData[Entity.name]) {
