@@ -16,10 +16,14 @@ import { Article } from './entity/Article';
     addDBToPool('default', db);
     use('default');
 
-    const user = await getRepository(User).prepareFetcher(db => {
-        return db.where('name', '==', 'たけちゃん');
-    }).fetchOne({relations: ['articles.category', 'articles.stat']});
-    console.log(user);
+    // const user = await getRepository(User).buildQuery(db => {
+    //     return db.where('name', '==', 'たけちゃん');
+    // }).fetchOne({relations: ['articles.category', 'articles.stat']});
+    // console.log(user);
+    
+    // await getRepository(User).prepareFetcher(db => {
+    //     return db.where('name', '==', 'たけちゃん');
+    // }).fetchOne();
 
     // トランザクション新規
     await runTransaction(async manager => {
@@ -46,10 +50,10 @@ import { Article } from './entity/Article';
             return;
         }
         user.name = 'noppoman2';
-        await manager.save(user);
+        await manager.getRepository(User).save(user);
 
         const article = user.articles[0];
         article.title = '更新しました';
-        await manager.save(article);
+        await manager.getRepository(Article).save(article);
     });
 })();

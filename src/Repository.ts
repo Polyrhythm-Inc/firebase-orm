@@ -1,10 +1,9 @@
-import { findMeta, ColumnSetting, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
+import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
 import * as admin from 'firebase-admin';
 import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
 
 export type FetchOption = {
     relations: string[];
-    transactingUpdate?: () => Promise<void>;
 }
 
 class Fetcher<T> {
@@ -16,18 +15,8 @@ class Fetcher<T> {
         if(!unoboxed || !unoboxed[0]) {
             return null;
         }
-        return buildEntity(this.meta, unoboxed[0], options, this.ref.transaction);
+        return buildEntity(this.meta, unoboxed[0], this.ref, options);
     }
-
-    public async fetchOneWithReference(options?: FetchOption): Promise<[T, admin.firestore.DocumentReference]|null> {
-        const result = await this.ref.get();
-        const unoboxed = result.unbox();
-        if(!unoboxed || !unoboxed[0]) {
-            return null;
-        }
-        const ent = await buildEntity<T>(this.meta, unoboxed[0], options, this.ref.transaction);
-        return [ent, this.ref.ref as admin.firestore.DocumentReference];
-    }    
 
     public async fetchAll(options?: FetchOption): Promise<T[]> {
         const result = await this.ref.get();
@@ -37,7 +26,7 @@ class Fetcher<T> {
         }
         const results: T[] = [];
         for(const data of docs) {
-            results.push(await buildEntity(this.meta, data, options, this.ref.transaction) as any);
+            results.push(await buildEntity(this.meta, data, this.ref, options as any));
         }
         return results;
     }
@@ -88,6 +77,17 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
             }
             savingParams[joinColumnName] = ref;
         }
+        else if(column instanceof _OneToOneSetting)  {
+            if(!column.option?.joinColumnName) {
+                continue;
+            }
+            const joinColumnName = column.option.joinColumnName;
+            const ref = getDocumentReference(resource[key]);
+            if(!ref) {
+                throw new Error('document reference should not be empty');
+            }
+            savingParams[joinColumnName] = ref;
+        }        
     }
 
     return savingParams;
@@ -109,6 +109,15 @@ export class Repository<T extends {id: string}> {
         return new Fetcher<T>(meta, ref);
     }
 
+    public prepareUpdate(condition: (db: admin.firestore.CollectionReference<admin.firestore.DocumentData>) => ReferenceWrap) {
+        const meta = findMeta(this.Entity);
+        const ref = new FirestoreReference(
+            condition(getCurrentDB().collection(meta.tableName)),
+            this.transaction
+        )
+        return new Fetcher<T>(meta, ref);
+    }    
+
     fetchOneById(id: string, options?: FetchOption) {
         return this.prepareFetcher(db => {
             return db.doc(id);
@@ -120,16 +129,49 @@ export class Repository<T extends {id: string}> {
     } 
 
     public async save(resource: T): Promise<T> {
-        const meta = findMeta(this.Entity);
-        const _ref = getCurrentDB().collection(meta.tableName).doc(resource.id);
-        const ref = new FirestoreReference(
-            _ref,
-            this.transaction
-        )
-        const savingParams = createSavingParams(meta, resource);
-        ref.set(savingParams);
-        (resource as any)[documentReferencePath] = _ref;
-        return resource;
+        const documentReference = getDocumentReference(resource);
+        if(this.transaction && documentReference) {
+            if(documentReference.id !== resource.id) {
+                throw new Error('The resource is broken.');
+            }
+
+            const Entity = (resource as any).constructor;
+            const meta = findMeta(Entity);
+            const params = createSavingParams(meta, resource);
+    
+            await this.transaction.set(documentReference, params);
+            return resource;
+        } else {
+            const meta = findMeta(this.Entity);
+            const _ref = getCurrentDB().collection(meta.tableName).doc(resource.id);
+            const ref = new FirestoreReference(
+                _ref,
+                this.transaction
+            )
+            const savingParams = createSavingParams(meta, resource);
+            await ref.set(savingParams);
+            (resource as any)[documentReferencePath] = _ref;
+            return resource;
+        }
+    }
+
+    public async delete(resourceOrId: string|T) {
+        const ref = getDocumentReference(resourceOrId);
+        if(ref) {
+            if(this.transaction) {
+                await this.transaction.delete(ref);
+            } else {
+                await ref.delete();
+            }
+        } else {
+            const meta = findMeta(this.Entity);
+            const ref = getCurrentDB().collection(meta.tableName).doc(resourceOrId as string);
+            if(this.transaction) {
+                await this.transaction.delete(ref);
+            } else {
+                await ref.delete();
+            }
+        }
     }
 }
 
@@ -142,20 +184,6 @@ export class TransactionManager {
 
     getRepository<T extends {id: string}>(Entity: new () => T): Repository<T> {
         return new Repository(Entity, this.transaction);
-    }
-
-    async save<T>(item: T) {
-        const documentReference = getDocumentReference(item);
-        if(!documentReference) {
-            throw new Error(`document reference does not exist in ${item}`);
-        }
-
-        const Entity = (item as any).constructor;
-        const meta = findMeta(Entity);
-        const params = createSavingParams(meta, item);
-
-        await this.transaction.set(documentReference, params);
-        return item;
     }
 }
 

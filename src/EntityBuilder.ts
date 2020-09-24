@@ -1,6 +1,6 @@
 import { findMeta, ColumnSetting, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
 import * as admin from 'firebase-admin';
-import { FetchOption, getRepository } from "./Repository";
+import { FetchOption, getDocumentReference, getRepository } from "./Repository";
 
 export type ReferenceWrap = admin.firestore.DocumentReference | admin.firestore.Query;
 export type SnapShotWrap = admin.firestore.DocumentSnapshot | admin.firestore.QuerySnapshot;
@@ -75,7 +75,7 @@ export class RelationNotFoundError extends Error {
 
     public toString() {
         return this.name + ': ' + this.message;
-    }    
+    }
 }
 
 function relationToGroup(relations: string[]) {
@@ -113,7 +113,7 @@ function groupToRelation(grouped: {[key: string]: any}) {
 }
 
 
-export async function buildEntity<T>(meta: EntityMetaData, data: any, options?: FetchOption, transaction?: admin.firestore.Transaction) {
+export async function buildEntity<T>(meta: EntityMetaData, data: any, reference: FirestoreReference<T>, options?: FetchOption) {
     const groupedRelations = options?.relations ? relationToGroup(options.relations) : {};
     const plain: {[key: string]: any} = {};
 
@@ -140,7 +140,7 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, options?: 
                     top: setting.propertyKey,
                     hierarchy: relation
                 },
-                transaction: transaction,
+                reference: reference,
                 fetchMode: {
                     mode: 'ref',
                     reference: rawRef
@@ -152,17 +152,16 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, options?: 
             const relation = groupedRelations[setting.propertyKey];
             if(!relation) {
                 continue;
-            }                
+            }
             const hierarchy = await followHierarchy({
                 setting: setting, 
                 relations: {
                     top: setting.propertyKey,
                     hierarchy: relation
                 },
-                transaction: transaction,
+                reference: reference,
                 fetchMode: {
-                    mode: 'many',
-                    parentId: data.id
+                    mode: 'many'
                 }
             });
             Object.assign(plain, hierarchy);
@@ -181,24 +180,24 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, options?: 
                         top: setting.propertyKey,
                         hierarchy: relation
                     },
-                    transaction: transaction,
+                    reference: reference,
                     fetchMode: {
                         mode: 'ref',
                         reference: rawRef
                     }
                 });
                 Object.assign(plain, hierarchy);                    
-            } else {
+            } else if(setting.option?.relationColumn) {
                 const hierarchy = await followHierarchy({
                     setting: setting, 
                     relations: {
                         top: setting.propertyKey,
                         hierarchy: relation
                     },
-                    transaction: transaction,
+                    reference: reference,
                     fetchMode: {
                         mode: 'single',
-                        parentId: data.id
+                        reference: data[documentReferencePath]
                     }
                 });
                 Object.assign(plain, hierarchy);
@@ -227,44 +226,46 @@ async function followHierarchy<T>(params: {
         reference: ReferenceWrap
     }|{
         mode: 'single',
-        parentId: string
+        reference: ReferenceWrap
     }|{
-        mode: 'many',
-        parentId: string
+        mode: 'many'
     },
-    transaction?: admin.firestore.Transaction,
+    reference?: FirestoreReference<T>,
 }) {
     const results: {[key: string]: any} = {};
 
     switch(params.fetchMode.mode)  {
     case 'ref':
-        const ref = new FirestoreReference(params.fetchMode.reference, params.transaction);
+        const ref = new FirestoreReference(params.fetchMode.reference, params.reference?.transaction);
         const box = await ref.get();
         const unboxed = box.unbox();
         if(unboxed && unboxed[0]) {
             const meta = findMeta(params.setting.getEntity());
-            results[params.setting.propertyKey] = await buildEntity(meta, unboxed[0], {relations: groupToRelation(params.relations.hierarchy || {})}, params.transaction)
+            results[params.setting.propertyKey] = await buildEntity(meta, unboxed[0], ref, {relations: groupToRelation(params.relations.hierarchy || {})})
         }
         break;
 
     case 'single':
-        const singleParentId = params.fetchMode.parentId;
+        const singleRef = params.fetchMode.reference;
         const singlRepo = getRepository(params.setting.getEntity());
-        if(params.transaction) {
-            singlRepo.setTransaction(params.transaction);
+        if(params.reference?.transaction) {
+            singlRepo.setTransaction(params.reference.transaction);
         }
-        results[params.setting.propertyKey] = await singlRepo.prepareFetcher(db => db.doc(singleParentId)).fetchOne({
+        results[params.setting.propertyKey] = await singlRepo.prepareFetcher(db => {
+            return db.where((params.setting.option! as any).relationColumn, '==',  singleRef);
+        }).fetchOne({
             relations: groupToRelation(params.relations.hierarchy || {})
         });
         break;
 
     case 'many':
-        const manyParentId = params.fetchMode.parentId;
         const manyRepo = getRepository(params.setting.getEntity());
-        if(params.transaction) {
-            manyRepo.setTransaction(params.transaction);
+        if(params.reference?.transaction) {
+            manyRepo.setTransaction(params.reference?.transaction);
         }
-        results[params.setting.propertyKey] = await manyRepo.prepareFetcher(db => db.doc(manyParentId)).fetchAll({
+        results[params.setting.propertyKey] = await manyRepo.prepareFetcher(db => {
+            return db.where((params.setting.option! as any).relationColumn, '==', params.reference?.ref);
+        }).fetchAll({
             relations: groupToRelation(params.relations.hierarchy || {})
         });
         break;

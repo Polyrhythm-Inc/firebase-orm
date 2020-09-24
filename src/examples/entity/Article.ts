@@ -14,7 +14,7 @@ export class Article {
     @ManyToOne(() => User, {joinColumnName: 'user_id'})
     user: User;
 
-    @OneToOne(() => ArticleStat)
+    @OneToOne(() => ArticleStat, {relationColumn: 'article_id'})
     stat: ArticleStat;
     
     @ManyToOne(() => Category, {joinColumnName: 'category_id'})

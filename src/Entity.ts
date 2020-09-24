@@ -16,11 +16,11 @@ export class _ColumnSetting implements ColumnSetting {
 }
 
 export class _OneToManySetting<T> implements ColumnSetting {
-    constructor(public propertyKey: string, public getEntity: () => ClassType<T>) {}
+    constructor(public propertyKey: string, public getEntity: () => ClassType<T>, public option?: RelationOption & {relationColumn: string}) {}
 }
 
 export class _OneToOneSetting<T> implements ColumnSetting {
-    constructor(public propertyKey: string, public getEntity: () => ClassType<T>, public option?: RelationOption & {joinColumnName: string}) {}
+    constructor(public propertyKey: string, public getEntity: () => ClassType<T>, public option?: RelationOption & {relationColumn: string; joinColumnName: string}) {}
 }
 
 export class _ManyToOneSetting<T> implements ColumnSetting {
@@ -98,13 +98,13 @@ export function Column(options?: ColumOption) {
     }
 }
 
-export function OneToMany<T>(getEntity: () => ClassType<T>) {
+export function OneToMany<T>(getEntity: () => ClassType<T>, options?: {relationColumn: string}) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(() => target.constructor, new _OneToManySetting(propertyKey, getEntity));
+        addColumnSettings(() => target.constructor, new _OneToManySetting(propertyKey, getEntity, options as any));
     }
 }
 
-export function OneToOne<T>(getEntity: () => ClassType<T>, options?: {joinColumnName: string}) {
+export function OneToOne<T>(getEntity: () => ClassType<T>, options?: {relationColumn?: string; joinColumnName?: string}) {
     return (target: any, propertyKey: string) => {
         addColumnSettings(() => target.constructor, new _OneToOneSetting(propertyKey, getEntity, options as any));
     }
