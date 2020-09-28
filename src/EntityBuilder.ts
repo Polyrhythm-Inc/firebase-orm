@@ -1,9 +1,9 @@
 import { findMeta, ColumnSetting, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
-import * as admin from 'firebase-admin';
-import { FetchOption, getDocumentReference, getRepository } from "./Repository";
+import { FetchOption, getRepository } from "./Repository";
+import { DocumentReference, DocumentSnapshot, Query, QuerySnapshot, firestore } from './type-mapper';
 
-export type ReferenceWrap = admin.firestore.DocumentReference | admin.firestore.Query;
-export type SnapShotWrap = admin.firestore.DocumentSnapshot | admin.firestore.QuerySnapshot;
+export type ReferenceWrap = DocumentReference | Query;
+export type SnapShotWrap = DocumentSnapshot | QuerySnapshot;
 
 export declare type QueryPartialEntity<T> = {
     [P in keyof T]?: T[P] | (() => string);
@@ -19,13 +19,13 @@ export class SnapShotBox {
     constructor(private snapshot: SnapShotWrap) {}
 
     unbox() {
-        if(this.snapshot instanceof admin.firestore.DocumentSnapshot) {
+        if(this.snapshot instanceof firestore.DocumentSnapshot) {
             if(!this.snapshot.exists) {
                 return null;
             }
             return [{...{id: this.snapshot.id, [documentReferencePath]: this.snapshot.ref}, ...this.snapshot.data()}];
         }
-        else if(this.snapshot instanceof admin.firestore.QuerySnapshot) {
+        else if(this.snapshot instanceof firestore.QuerySnapshot) {
             if(this.snapshot.size == 0) {
                 return [];
             }
@@ -39,11 +39,11 @@ export class SnapShotBox {
 
 export class FirestoreReference<T> {
 
-    constructor(public ref: ReferenceWrap, public transaction?: admin.firestore.Transaction) {}
+    constructor(public ref: ReferenceWrap, public transaction?: FirebaseFirestore.Transaction) {}
 
     public async get() {
         if(this.transaction) {
-            const box = new SnapShotBox(await this.transaction.get(this.ref as admin.firestore.Query));
+            const box = new SnapShotBox(await this.transaction.get(this.ref as FirebaseFirestore.Query));
             return box;
         } else {
             return new SnapShotBox(await this.ref.get());
@@ -51,7 +51,7 @@ export class FirestoreReference<T> {
     }
 
     public async set(params: QueryPartialEntity<T>) {
-        if(this.ref instanceof admin.firestore.DocumentReference) {
+        if(this.ref instanceof firestore.DocumentReference) {
             if(this.transaction) {
                 await this.transaction.set(this.ref, params);
                 return;

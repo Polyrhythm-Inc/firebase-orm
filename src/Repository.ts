@@ -1,12 +1,17 @@
 import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
-import * as admin from 'firebase-admin';
 import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
+import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
 export type FetchOption = {
     relations: string[];
 }
 
-class Fetcher<T> {
+export type OnsnapShotResult<T> = {
+    type: DocumentChangeType;
+    item?: T
+};
+
+export class Fetcher<T> {
     constructor(private meta: EntityMetaData, private ref: FirestoreReference<T>) {}
 
     public async fetchOne(options?: FetchOption): Promise<T|null> {
@@ -30,12 +35,34 @@ class Fetcher<T> {
         }
         return results;
     }
+
+    public onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption) {
+        const unsubscribe = (this.ref.ref as Query).onSnapshot(async snapshot => {
+            for(const change of snapshot.docChanges()) {
+                const ref = new FirestoreReference(change.doc.ref);
+                const result = await ref.get();
+                const unoboxed = result.unbox();
+                if(!unoboxed || !unoboxed[0]) {
+                    callback({
+                        type: change.type
+                    });                    
+                } else {
+                    callback({
+                        type: change.type,
+                        item: await buildEntity(this.meta, unoboxed[0], ref, options as any)
+                    });                    
+                }             
+            }
+        });
+        
+        return unsubscribe;
+    }
 }
 
-const dbPool: {[key: string]: admin.firestore.Firestore} = {};
+const dbPool: {[key: string]: Firestore} = {};
 let currentConnectionName: string|null = null;
 
-export function addDBToPool(name: string, db: admin.firestore.Firestore) {
+export function addDBToPool(name: string, db: Firestore) {
     if(!currentConnectionName) {
         currentConnectionName = name;
     }
@@ -50,7 +77,7 @@ export function use(name: string) {
     currentConnectionName = name;
 }
 
-export function getCurrentDB(): admin.firestore.Firestore {
+export function getCurrentDB(): Firestore {
     return dbPool[currentConnectionName!];
 }
 
@@ -71,7 +98,7 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
                 continue;
             }
             const joinColumnName = column.option.joinColumnName;
-            const ref = getDocumentReference(resource[key]);
+            const ref = _getDocumentReference(resource[key]);
             if(!ref) {
                 throw new Error('document reference should not be empty');
             }
@@ -82,7 +109,7 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
                 continue;
             }
             const joinColumnName = column.option.joinColumnName;
-            const ref = getDocumentReference(resource[key]);
+            const ref = _getDocumentReference(resource[key]);
             if(!ref) {
                 throw new Error('document reference should not be empty');
             }
@@ -94,13 +121,13 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
 }
 
 export class Repository<T extends {id: string}> {
-    constructor(private Entity: ClassType<T>, private transaction?: admin.firestore.Transaction) {}
+    constructor(private Entity: ClassType<T>, private transaction?: Transaction) {}
 
-    public setTransaction(transaction: admin.firestore.Transaction) {
+    public setTransaction(transaction: Transaction) {
         this.transaction = transaction;
     }
 
-    public prepareFetcher(condition: (db: admin.firestore.CollectionReference<admin.firestore.DocumentData>) => ReferenceWrap) {
+    public prepareFetcher(condition: (db: CollectionReference) => ReferenceWrap) {
         const meta = findMeta(this.Entity);
         const ref = new FirestoreReference(
             condition(getCurrentDB().collection(meta.tableName)),
@@ -109,7 +136,7 @@ export class Repository<T extends {id: string}> {
         return new Fetcher<T>(meta, ref);
     }
 
-    public prepareUpdate(condition: (db: admin.firestore.CollectionReference<admin.firestore.DocumentData>) => ReferenceWrap) {
+    public prepareUpdate(condition: (db: CollectionReference) => ReferenceWrap) {
         const meta = findMeta(this.Entity);
         const ref = new FirestoreReference(
             condition(getCurrentDB().collection(meta.tableName)),
@@ -128,8 +155,12 @@ export class Repository<T extends {id: string}> {
         return this.prepareFetcher(db => db).fetchAll(options);
     } 
 
+    public async onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption) {
+        return this.prepareFetcher(db => db).onSnapShot(callback, options);
+    }     
+
     public async save(resource: T): Promise<T> {
-        const documentReference = getDocumentReference(resource);
+        const documentReference = _getDocumentReference(resource);
         if(this.transaction && documentReference) {
             if(documentReference.id !== resource.id) {
                 throw new Error('The resource is broken.');
@@ -156,7 +187,7 @@ export class Repository<T extends {id: string}> {
     }
 
     public async delete(resourceOrId: string|T) {
-        const ref = getDocumentReference(resourceOrId);
+        const ref = _getDocumentReference(resourceOrId);
         if(ref) {
             if(this.transaction) {
                 await this.transaction.delete(ref);
@@ -180,7 +211,7 @@ export function getRepository<T extends {id: string}>(Entity: new () => T): Repo
 }
 
 export class TransactionManager {
-    constructor(private transaction: admin.firestore.Transaction) {}
+    constructor(private transaction: Transaction) {}
 
     getRepository<T extends {id: string}>(Entity: new () => T): Repository<T> {
         return new Repository(Entity, this.transaction);
@@ -194,6 +225,6 @@ export function runTransaction<T>(callback: (manager: TransactionManager) => Pro
     });
 }
 
-export function getDocumentReference<T>(item: T): admin.firestore.DocumentReference|undefined {
+export function _getDocumentReference<T>(item: T): DocumentReference|undefined {
     return (item as any)[documentReferencePath];
 }

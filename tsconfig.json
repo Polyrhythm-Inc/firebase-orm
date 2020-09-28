@@ -15,7 +15,7 @@
         "noUnusedLocals": false,
         "noImplicitAny": true,
         "sourceMap": true,
-        "outDir": "compiled"
+        "outDir": "lib"
     },
     "include": [
         "src/**/*"

@@ -16,44 +16,13 @@ import { Article } from './entity/Article';
     addDBToPool('default', db);
     use('default');
 
-    // const user = await getRepository(User).buildQuery(db => {
-    //     return db.where('name', '==', 'たけちゃん');
-    // }).fetchOne({relations: ['articles.category', 'articles.stat']});
-    // console.log(user);
-    
-    // await getRepository(User).prepareFetcher(db => {
-    //     return db.where('name', '==', 'たけちゃん');
-    // }).fetchOne();
-
-    // トランザクション新規
-    await runTransaction(async manager => {
-        const user = new User();
-        user.id = '3';
-        user.name = 'foo';
-        await manager.getRepository(User).save(user);
-    
-        const article = new Article();
-        article.id = '3';
-        article.title = 'title';
-        article.contentText = 'bodybody';
-        article.user = user;
-        await manager.getRepository(Article).save(article);
-    });
-
-    // トランザクション更新
-    await runTransaction(async manager => {
-        const user = await manager.getRepository(User).prepareFetcher(db => {
-            return db.doc('1');
-        }).fetchOne({relations: ['articles']});
-
-        if(!user) {
-            return;
+    getRepository(User).prepareFetcher(db => {
+        return db.limit(5);
+    }).onSnapShot(async result => {
+        if(result.type === "added") {
+            console.log(result.item);
         }
-        user.name = 'noppoman2';
-        await manager.getRepository(User).save(user);
-
-        const article = user.articles[0];
-        article.title = '更新しました';
-        await manager.getRepository(Article).save(article);
+    }, {
+        relations: ['articles']
     });
 })();
