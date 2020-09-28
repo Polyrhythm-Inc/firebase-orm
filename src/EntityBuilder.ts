@@ -1,6 +1,6 @@
 import { findMeta, ColumnSetting, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
 import { FetchOption, getRepository } from "./Repository";
-import { DocumentReference, DocumentSnapshot, Query, QuerySnapshot, firestore } from './type-mapper';
+import { DocumentReference, DocumentSnapshot, Query, QuerySnapshot, firestore, Transaction } from './type-mapper';
 
 export type ReferenceWrap = DocumentReference | Query;
 export type SnapShotWrap = DocumentSnapshot | QuerySnapshot;
@@ -39,11 +39,11 @@ export class SnapShotBox {
 
 export class FirestoreReference<T> {
 
-    constructor(public ref: ReferenceWrap, public transaction?: FirebaseFirestore.Transaction) {}
+    constructor(public ref: ReferenceWrap, public transaction?: Transaction) {}
 
     public async get() {
         if(this.transaction) {
-            const box = new SnapShotBox(await this.transaction.get(this.ref as FirebaseFirestore.Query));
+            const box = new SnapShotBox(await this.transaction.get(this.ref as Query));
             return box;
         } else {
             return new SnapShotBox(await this.ref.get());
