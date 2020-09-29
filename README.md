@@ -251,7 +251,7 @@ await runTransaction(async manager => {
 
 ## onSnapShot
 
-リアルタイム同期などに用いられる`onSnapShot`もRepositoryから扱うことができます。これまでの`fetch`オペレーションと同様に、`prepareFetcher`でクエリのコンディションを指定することも可能です。
+リアルタイム同期などに用いられる`onSnapShot`もRepositoryから扱うことができます。これまでの`fetch`オペレーションと同様に、`prepareFetcher`でクエリのコンディションを指定することも可能です。`onSnapShot`はレコードの`購読を`やめるための関数を返します。
 
 ```typescript
 const unsubscribe = getRepository(User).prepareFetcher(db => {
@@ -267,6 +267,8 @@ const unsubscribe = getRepository(User).prepareFetcher(db => {
     else if(type === "removed") {
         console.log(result.item) // undefined
     }
+    
+    unsubscribe();
 }, {
     relations: ['articles.category', 'articles.stat']
 });
