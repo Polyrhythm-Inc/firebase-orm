@@ -30,7 +30,7 @@ export declare class Repository<T extends {
     prepareUpdate(condition: (db: CollectionReference) => ReferenceWrap): Fetcher<T>;
     fetchOneById(id: string, options?: FetchOption): Promise<T | null>;
     fetchAll(options?: FetchOption): Promise<T[]>;
-    onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): Promise<() => void>;
+    onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): () => void;
     save(resource: T): Promise<T>;
     delete(resourceOrId: string | T): Promise<void>;
 }

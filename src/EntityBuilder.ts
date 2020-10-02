@@ -15,17 +15,30 @@ export declare type QueryDeepPartialEntity<T> = {
 
 export const documentReferencePath = '__firestore_document_reference__';
 
+function isBrowserOptimizedDocumentSnapshot(snapshot: any) {
+    return snapshot.data && "exists" in snapshot
+}
+
+function isBrowserOptimizedQuerySnapshot(snapshot: any) {
+    return snapshot.docs && "size" in snapshot
+}
+
+function isBrowserOptimizedDocumentReference(snapshot: any) {
+    return snapshot.set && snapshot.delete && snapshot.get;
+}
+
 export class SnapShotBox {
     constructor(private snapshot: SnapShotWrap) {}
 
     unbox() {
-        if(this.snapshot instanceof firestore.DocumentSnapshot) {
-            if(!this.snapshot.exists) {
+        if(this.snapshot instanceof firestore.DocumentSnapshot || isBrowserOptimizedDocumentSnapshot(this.snapshot)) {
+            const snapshot = this.snapshot as DocumentSnapshot;
+            if(!snapshot.exists) {
                 return null;
             }
-            return [{...{id: this.snapshot.id, [documentReferencePath]: this.snapshot.ref}, ...this.snapshot.data()}];
+            return [{...{id: snapshot.id, [documentReferencePath]: snapshot.ref}, ...snapshot.data()}];
         }
-        else if(this.snapshot instanceof firestore.QuerySnapshot) {
+        else if(this.snapshot instanceof firestore.QuerySnapshot || isBrowserOptimizedQuerySnapshot(this.snapshot)) {
             if(this.snapshot.size == 0) {
                 return [];
             }
@@ -43,7 +56,7 @@ export class FirestoreReference<T> {
 
     public async get() {
         if(this.transaction) {
-            const box = new SnapShotBox(await this.transaction.get(this.ref as Query));
+            const box = new SnapShotBox(await this.transaction.get(this.ref as any));
             return box;
         } else {
             return new SnapShotBox(await this.ref.get());
@@ -51,12 +64,13 @@ export class FirestoreReference<T> {
     }
 
     public async set(params: QueryPartialEntity<T>) {
-        if(this.ref instanceof firestore.DocumentReference) {
+        if(this.ref instanceof firestore.DocumentReference || isBrowserOptimizedDocumentReference(this.ref)) {
+            const ref = this.ref as DocumentReference;
             if(this.transaction) {
-                await this.transaction.set(this.ref, params);
+                await this.transaction.set(ref, params);
                 return;
             } else {
-                await this.ref.set(params);
+                await ref.set(params);
                 return;
             }
         }

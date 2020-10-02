@@ -85,13 +85,16 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
     const savingParams: {[key: string]: any} = {};
 
     for(const key in resource) {
+        if(!resource[key]) {
+            continue;
+        }
         const column = meta.columns.filter(x => key === x.propertyKey)[0];
         if(!column) {
             continue;
         }
         if(column instanceof _ColumnSetting) {
             const keyInForestore = column.option?.name || column.propertyKey;
-            savingParams[keyInForestore] = resource[key];            
+            savingParams[keyInForestore] = resource[key];
         }
         else if(column instanceof _ManyToOneSetting)  {
             if(!column.option?.joinColumnName) {
@@ -155,7 +158,7 @@ export class Repository<T extends {id: string}> {
         return this.prepareFetcher(db => db).fetchAll(options);
     } 
 
-    public async onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption) {
+    public onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption) {
         return this.prepareFetcher(db => db).onSnapShot(callback, options);
     }     
 
