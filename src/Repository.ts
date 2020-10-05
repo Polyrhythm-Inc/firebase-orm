@@ -167,13 +167,21 @@ export class Repository<T extends {id: string}> {
             return resource;
         } else {
             const meta = findMeta(this.Entity);
-            const _ref = this.collectionReference(meta).doc(resource.id);
+            let _ref: DocumentReference;
+            if(resource.id) {
+                _ref = this.collectionReference(meta).doc(resource.id);
+            } else {
+                _ref = this.collectionReference(meta).doc();
+            }
             const ref = new FirestoreReference(
                 _ref,
                 this.transaction
             )
             const savingParams = createSavingParams(meta, resource);
             await ref.set(savingParams);
+            if(!resource.id) {
+                resource.id = (ref.ref as DocumentReference).id;
+            }
             (resource as any)[documentReferencePath] = _ref;
             return resource;
         }

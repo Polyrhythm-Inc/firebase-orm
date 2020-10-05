@@ -34,7 +34,7 @@
   "description": "",
   "husky": {
     "hooks": {
-      "pre-commit": "./node_modules/.bin/tsc"
+      "pre-commit": "./node_modules/.bin/tsc && git add lib"
     }    
   }
 }
