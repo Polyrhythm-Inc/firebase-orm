@@ -59,6 +59,7 @@ export declare class _UpdateDateColumnSetting<T> implements ColumnSetting {
 export declare type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
+    parentEntityGetter?: () => Function;
 };
 export declare type EntityColumnInfo = {
     columns: ColumnSetting[];
@@ -89,3 +90,4 @@ export declare function ManyToOne<T>(getEntity: () => ClassType<T>, options?: {
 export declare function CreateDateColumn<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function UpdateDateColumn<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function FirebaseEntity(tableName: string): (constructor: Function) => void;
+export declare function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string): (constructor: Function) => void;

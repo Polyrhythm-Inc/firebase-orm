@@ -24,25 +24,36 @@ export declare class Repository<T extends {
 }> {
     private Entity;
     private transaction?;
-    constructor(Entity: ClassType<T>, transaction?: FirebaseFirestore.Transaction | undefined);
+    private parentId?;
+    constructor(Entity: ClassType<T>, transaction?: FirebaseFirestore.Transaction | undefined, parentId?: string | undefined);
     setTransaction(transaction: Transaction): void;
     prepareFetcher(condition: (db: CollectionReference) => ReferenceWrap): Fetcher<T>;
-    prepareUpdate(condition: (db: CollectionReference) => ReferenceWrap): Fetcher<T>;
     fetchOneById(id: string, options?: FetchOption): Promise<T | null>;
     fetchAll(options?: FetchOption): Promise<T[]>;
     onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): () => void;
     save(resource: T): Promise<T>;
     delete(resourceOrId: string | T): Promise<void>;
+    private collectionReference;
 }
 export declare function getRepository<T extends {
     id: string;
 }>(Entity: new () => T): Repository<T>;
+export declare function getRepository<T extends {
+    id: string;
+}>(Entity: new () => T, params: {
+    withParentId: string;
+}): Repository<T>;
 export declare class TransactionManager {
     private transaction;
     constructor(transaction: Transaction);
     getRepository<T extends {
         id: string;
     }>(Entity: new () => T): Repository<T>;
+    getRepository<T extends {
+        id: string;
+    }>(Entity: new () => T, params: {
+        withParentId: string;
+    }): Repository<T>;
 }
 export declare function runTransaction<T>(callback: (manager: TransactionManager) => Promise<T>): Promise<T>;
 export declare function _getDocumentReference<T>(item: T): DocumentReference | undefined;
