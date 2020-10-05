@@ -38,6 +38,7 @@ export class _UpdateDateColumnSetting<T> implements ColumnSetting {
 export type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
+    parentEntityGetter?: () => Function;
 }
 
 export type EntityColumnInfo = {
@@ -133,6 +134,16 @@ export function FirebaseEntity(tableName: string) {
         entityMetaInfo.push({
             tableName: tableName,
             Entity: constructor
+        });
+    }
+}
+
+export function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string) {
+    return (constructor: Function) => {
+        entityMetaInfo.push({
+            tableName: tableName,
+            Entity: constructor,
+            parentEntityGetter: parentEntityGetter
         });
     }
 }

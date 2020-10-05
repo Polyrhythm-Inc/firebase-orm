@@ -7,6 +7,7 @@ import { Article } from '../examples/entity/Article';
 import { Category } from '../examples/entity/Category';
 import { expect } from 'chai';
 import { EventEmitter } from 'events';
+import { ArticleComment } from '../examples/entity/ArticleComment';
 
 const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
 
@@ -246,6 +247,52 @@ describe('Repository test', async () => {
         });        
     });
 
+    context('nestedCollection', () => {
+        it("should perform curd for nested collection", async () => {
+            const result = await runTransaction(async manager => {
+                const user = new User();
+                user.id = getRandomIntString();
+                user.name = 'test-user';
+                await manager.getRepository(User).save(user);
+
+                const article = new Article();
+                article.id = getRandomIntString();
+                article.title = 'title';
+                article.contentText = 'bodybody';
+                article.user = user;
+
+                await manager.getRepository(Article).save(article);
+
+                const articleComment = new ArticleComment();
+                articleComment.id = getRandomIntString();
+                articleComment.text = 'hello';           
+                
+                await manager.getRepository(ArticleComment, {withParentId: article.id}).save(articleComment);
+
+                return [article, articleComment];
+            });
+
+            const article = result[0] as Article;
+
+            const commentRepo = getRepository(ArticleComment, {withParentId: article.id});
+
+            let comments = await commentRepo.fetchAll();
+            expect(comments.length).eq(1);
+
+            let comment = comments[0];
+            comment.text = 'updated';
+            await commentRepo.save(comment);
+
+            comments = await commentRepo.fetchAll();
+            comment = comments[0];
+            expect(comment.text).eq("updated");
+
+            await commentRepo.delete(comment);
+            comments = await commentRepo.fetchAll();
+            expect(comments.length).eq(0);
+        })
+    });    
+
     context('onSnapshot', () => {
         it("should sync snap shot with relations", async () => {
             const evm = new EventEmitter();
@@ -319,5 +366,5 @@ describe('Repository test', async () => {
                 await getRepository(User).delete(user);
             });            
         });
-    });       
+    });
 });

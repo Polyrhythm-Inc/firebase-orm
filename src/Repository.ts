@@ -124,7 +124,7 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
 }
 
 export class Repository<T extends {id: string}> {
-    constructor(private Entity: ClassType<T>, private transaction?: Transaction) {}
+    constructor(private Entity: ClassType<T>, private transaction?: Transaction, private parentId?: string) {}
 
     public setTransaction(transaction: Transaction) {
         this.transaction = transaction;
@@ -132,34 +132,24 @@ export class Repository<T extends {id: string}> {
 
     public prepareFetcher(condition: (db: CollectionReference) => ReferenceWrap) {
         const meta = findMeta(this.Entity);
-        const ref = new FirestoreReference(
-            condition(getCurrentDB().collection(meta.tableName)),
-            this.transaction
-        )
+        const colRef = this.collectionReference(meta);
+        const ref = new FirestoreReference(condition(colRef), this.transaction)
         return new Fetcher<T>(meta, ref);
     }
 
-    public prepareUpdate(condition: (db: CollectionReference) => ReferenceWrap) {
+    public fetchOneById(id: string, options?: FetchOption) {
         const meta = findMeta(this.Entity);
-        const ref = new FirestoreReference(
-            condition(getCurrentDB().collection(meta.tableName)),
-            this.transaction
-        )
-        return new Fetcher<T>(meta, ref);
-    }    
-
-    fetchOneById(id: string, options?: FetchOption) {
-        return this.prepareFetcher(db => {
-            return db.doc(id);
-        }).fetchOne(options);
+        return this.prepareFetcher(db => this.collectionReference(meta).doc(id)).fetchOne(options);
     }
 
-    fetchAll(options?: FetchOption) {
-        return this.prepareFetcher(db => db).fetchAll(options);
-    } 
+    public fetchAll(options?: FetchOption) {
+        const meta = findMeta(this.Entity);
+        return this.prepareFetcher(db => this.collectionReference(meta)).fetchAll(options);
+    }
 
     public onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption) {
-        return this.prepareFetcher(db => db).onSnapShot(callback, options);
+        const meta = findMeta(this.Entity);
+        return this.prepareFetcher(db => this.collectionReference(meta)).onSnapShot(callback, options);
     }     
 
     public async save(resource: T): Promise<T> {
@@ -177,7 +167,7 @@ export class Repository<T extends {id: string}> {
             return resource;
         } else {
             const meta = findMeta(this.Entity);
-            const _ref = getCurrentDB().collection(meta.tableName).doc(resource.id);
+            const _ref = this.collectionReference(meta).doc(resource.id);
             const ref = new FirestoreReference(
                 _ref,
                 this.transaction
@@ -199,7 +189,7 @@ export class Repository<T extends {id: string}> {
             }
         } else {
             const meta = findMeta(this.Entity);
-            const ref = getCurrentDB().collection(meta.tableName).doc(resourceOrId as string);
+            const ref = this.collectionReference(meta).doc(resourceOrId as string)
             if(this.transaction) {
                 await this.transaction.delete(ref);
             } else {
@@ -207,16 +197,41 @@ export class Repository<T extends {id: string}> {
             }
         }
     }
+
+    private collectionReference(meta: EntityMetaData) {
+        if(this.parentId) {
+            if(!meta.parentEntityGetter) {
+                throw new Error(`${this.Entity} is not NestedFirebaseEntity`);
+            }
+            const parentMeta = findMeta(meta.parentEntityGetter());
+            return getCurrentDB()
+                    .collection(parentMeta.tableName)
+                    .doc(this.parentId)
+                    .collection(meta.tableName);
+        } else {
+            return getCurrentDB().collection(meta.tableName);
+        }
+    }    
 }
 
-export function getRepository<T extends {id: string}>(Entity: new () => T): Repository<T> {
+export function getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
+export function getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>
+export function getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+    if(params) {
+        return new Repository(Entity, undefined, params.withParentId);
+    }
     return new Repository(Entity);
 }
 
 export class TransactionManager {
     constructor(private transaction: Transaction) {}
 
-    getRepository<T extends {id: string}>(Entity: new () => T): Repository<T> {
+    getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
+    getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>    
+    getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+        if(params) {
+            return new Repository(Entity, this.transaction, params.withParentId);
+        }
         return new Repository(Entity, this.transaction);
     }
 }

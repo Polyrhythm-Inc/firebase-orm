@@ -274,6 +274,49 @@ const unsubscribe = getRepository(User).prepareFetcher(db => {
 });
 ```
 
+## Nested Collection
+
+例えば、`db.collection('foo').doc('1').collection('bar')`のようにネストしたコレクションへのアクセスを行う場合は、エンティティの宣言時に`@FirebaseEntity`の代わりに`@NestedFirebaseEntity`を利用します。次の`ArticleComment`は`Article`コレクションの子コレクションとして宣言されます。
+
+### Define Nested Entity
+
+```typescript
+@NestedFirebaseEntity(() => Article, 'article_comments')
+export class ArticleComment {
+    @PrimaryColumn()
+    id: string;
+
+    @Column()
+    text: string;
+}
+```
+
+### CURD for Nested Entity
+
+子コレクションにアクセスする場合、`getRepository(ArticleComment, {withParentId: parentId})`のように、`getRepository`の第2引数に`withParentId`を含むオブジェクトを渡します。
+
+```typescript
+const repo = getRepository(ArticleComment, {withParentId: article.id});
+
+const articleComment = new ArticleComment();
+articleComment.id = getRandomIntString();
+articleComment.text = 'hello';  
+
+// Create
+await repo.save(articleComment);
+
+// Fetch
+const comments = await repo.fetchOneById(articleComment.id);
+
+// Update
+articleComment.text = 'updated';
+await repo.save(articleComment);
+
+// Delete
+
+await repo.delete(articleComment);
+```
+
 ## Client-Side
 
 クライアントサイドで`firebase-orm`を利用する際は、`firebase-orm-client`を`npm`や`yarn`でインストールします。`firebase-orm-client`のほとんどのコードベースは`firebase-orm`を共有しています。このとき、オリジナルは`firebase-orm`側にしてください。サーバーとクライアントにおける相違点は`src/type-mapper.ts`と`example`です。特に`src/type-mapper.ts`はクライアントサイド用の `firebase SDK`とサーバーサイド用の`firebase-admin SDK`の違いを吸収するための重要なファイルとなっています。内容は次です。
