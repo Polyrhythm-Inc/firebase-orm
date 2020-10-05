@@ -8,6 +8,7 @@ export type FetchOption = {
 
 export type OnsnapShotResult<T> = {
     type: DocumentChangeType;
+    id: string;
     item?: T
 };
 
@@ -44,11 +45,13 @@ export class Fetcher<T> {
                 const unoboxed = result.unbox();
                 if(!unoboxed || !unoboxed[0]) {
                     callback({
-                        type: change.type
+                        type: change.type,
+                        id: (ref.ref as DocumentReference).id
                     });                    
                 } else {
                     callback({
                         type: change.type,
+                        id: (ref.ref as DocumentReference).id,
                         item: await buildEntity(this.meta, unoboxed[0], ref, options as any)
                     });                    
                 }             

@@ -6,6 +6,7 @@ export declare type FetchOption = {
 };
 export declare type OnsnapShotResult<T> = {
     type: DocumentChangeType;
+    id: string;
     item?: T;
 };
 export declare class Fetcher<T> {

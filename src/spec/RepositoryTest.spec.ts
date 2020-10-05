@@ -332,6 +332,7 @@ describe('Repository test', async () => {
 
                 case 3:
                     expect(type).eq('removed');
+                    expect(result.id).to.not.empty;
                     unsubscribe();
                     break;
                 }
