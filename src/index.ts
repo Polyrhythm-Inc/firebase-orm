@@ -7,6 +7,7 @@ export {
     CreateDateColumn,
     UpdateDateColumn,
     FirebaseEntity,
+    NestedFirebaseEntity,
     ColumOption,
     RelationOption,
     DateOption,
