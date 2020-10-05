@@ -1,3 +1,5 @@
+import { _getDocumentReference } from './Repository';
+
 export {
     PrimaryColumn,
     Column,
@@ -25,3 +27,5 @@ export {
     use,
     getCurrentDB
 } from './Repository';
+
+export const PureReference = _getDocumentReference;
