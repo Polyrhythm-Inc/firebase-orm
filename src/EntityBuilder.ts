@@ -1,4 +1,15 @@
-import { findMeta, ColumnSetting, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
+import { 
+    findMeta, 
+    ColumnSetting, 
+    ClassType, 
+    EntityMetaData, 
+    _ManyToOneSetting, 
+    _OneToManySetting, 
+    _OneToOneSetting, 
+    _ColumnSetting, 
+    _ArrayReference,
+    JoinColumnSetting
+} from './Entity';
 import { FetchOption, getRepository } from "./Repository";
 import { DocumentReference, DocumentSnapshot, Query, QuerySnapshot, firestore, Transaction } from './type-mapper';
 
@@ -126,6 +137,19 @@ function groupToRelation(grouped: {[key: string]: any}) {
     return keys;
 }
 
+function hasOwnProperty<X extends {}, Y extends PropertyKey>(obj: X, prop: Y): obj is X & Record<Y, unknown> {
+  return obj.hasOwnProperty(prop)
+}
+
+function getName(setting: ColumnSetting|JoinColumnSetting) {
+    if(!setting.option) {
+        return undefined;
+    }
+    if(hasOwnProperty(setting.option, 'name')) {
+        return setting.option.name as string;
+    }
+    return undefined;
+}
 
 export async function buildEntity<T>(meta: EntityMetaData, data: any, reference: FirestoreReference<T>, options?: FetchOption) {
     const groupedRelations = options?.relations ? relationToGroup(options.relations) : {};
@@ -138,7 +162,7 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, reference:
     }
     
     for(const setting of meta.columns) {
-        let keyInForestore = setting.option?.name || setting.propertyKey;
+        let keyInForestore = getName(setting) || setting.propertyKey;
         if(setting instanceof _ManyToOneSetting) {
             const relation = groupedRelations[setting.propertyKey];
             if(!relation) {
@@ -200,7 +224,7 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, reference:
                         reference: rawRef
                     }
                 });
-                Object.assign(plain, hierarchy);                    
+                Object.assign(plain, hierarchy);
             } else if(setting.option?.relationColumn) {
                 const hierarchy = await followHierarchy({
                     setting: setting, 
@@ -216,6 +240,24 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, reference:
                 });
                 Object.assign(plain, hierarchy);
             }
+        } else if(setting instanceof _ArrayReference) {
+            const relation = groupedRelations[setting.propertyKey];
+            if(!relation) {
+                continue;
+            }
+            const hierarchy = await followHierarchy({
+                setting: setting, 
+                relations: {
+                    top: setting.propertyKey,
+                    hierarchy: relation
+                },
+                reference: reference,
+                fetchMode: {
+                    mode: 'array',
+                    references: data[keyInForestore]
+                }
+            });
+            Object.assign(plain, hierarchy);
         } else {
             plain[setting.propertyKey] = (data as any)[keyInForestore];
         }
@@ -230,7 +272,7 @@ export async function buildEntity<T>(meta: EntityMetaData, data: any, reference:
 
 
 async function followHierarchy<T>(params: {
-    setting: ColumnSetting & {getEntity: () => ClassType<T & {id: string}>}, 
+    setting: JoinColumnSetting & {getEntity: () => ClassType<T & {id: string}>}, 
     relations: {
         top: string,
         hierarchy?: {[key: string]: any}
@@ -243,6 +285,9 @@ async function followHierarchy<T>(params: {
         reference: ReferenceWrap
     }|{
         mode: 'many'
+    }|{
+        mode: 'array',
+        references: ReferenceWrap[]
     },
     reference?: FirestoreReference<T>,
 }) {
@@ -266,7 +311,7 @@ async function followHierarchy<T>(params: {
             singlRepo.setTransaction(params.reference.transaction);
         }
         results[params.setting.propertyKey] = await singlRepo.prepareFetcher(db => {
-            return db.where((params.setting.option! as any).relationColumn, '==',  singleRef);
+            return db.where(params.setting.option!.relationColumn!, '==',  singleRef);
         }).fetchOne({
             relations: groupToRelation(params.relations.hierarchy || {})
         });
@@ -278,10 +323,24 @@ async function followHierarchy<T>(params: {
             manyRepo.setTransaction(params.reference?.transaction);
         }
         results[params.setting.propertyKey] = await manyRepo.prepareFetcher(db => {
-            return db.where((params.setting.option! as any).relationColumn, '==', params.reference?.ref);
+            return db.where(params.setting.option!.relationColumn!, '==', params.reference?.ref);
         }).fetchAll({
             relations: groupToRelation(params.relations.hierarchy || {})
         });
+        break;
+
+    case 'array':
+        const refs = params.fetchMode.references.map(ref => new FirestoreReference(ref, params.reference?.transaction))
+        results[params.setting.propertyKey] = await Promise.all(refs.map(ref => {
+            return ref.get().then(box => {
+                const unboxed = box.unbox();
+                if(unboxed && unboxed[0]) {
+                    const meta = findMeta(params.setting.getEntity());
+                    return buildEntity(meta, unboxed[0], ref, {relations: groupToRelation(params.relations.hierarchy || {})});
+                }     
+                return null;
+            })
+        }));
         break;
     }
 

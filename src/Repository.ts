@@ -1,4 +1,4 @@
-import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting } from './Entity';
+import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference } from './Entity';
 import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
@@ -120,7 +120,28 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
                 throw new Error('document reference should not be empty');
             }
             savingParams[joinColumnName] = ref;
-        }        
+        }
+        else if(column instanceof _ArrayReference) {
+            if(!column.option?.joinColumnName) {
+                continue;
+            }            
+            const joinColumnName = column.option.joinColumnName;
+            const children = resource[key];
+            
+            if(!Array.isArray(children)) {
+                throw new Error(`${key} is not an array`);
+            }
+
+            const refs = [];
+            for(const child of children) {
+                const ref = _getDocumentReference(child);
+                if(!ref) {
+                    throw new Error('document reference should not be empty');
+                }
+                refs.push(ref);
+            }
+            savingParams[joinColumnName] = refs;
+        }
     }
 
     return savingParams;

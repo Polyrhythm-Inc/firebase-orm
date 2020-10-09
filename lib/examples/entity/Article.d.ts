@@ -6,6 +6,6 @@ export declare class Article {
     title: string;
     user: User;
     stat: ArticleStat;
-    category: Category;
+    categories: Category[];
     contentText: string;
 }

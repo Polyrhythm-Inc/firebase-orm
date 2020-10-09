@@ -1,4 +1,4 @@
-import { Column, PrimaryColumn, FirebaseEntity, ManyToOne, OneToOne} from "../../Entity";
+import { Column, PrimaryColumn, FirebaseEntity, ManyToOne, OneToOne, ArrayReference} from "../../Entity";
 import { ArticleStat } from "./ArticleStat";
 import { Category } from "./Category";
 import { User } from './User';
@@ -17,8 +17,8 @@ export class Article {
     @OneToOne(() => ArticleStat, {relationColumn: 'article_id'})
     stat: ArticleStat;
     
-    @ManyToOne(() => Category, {joinColumnName: 'category_id'})
-    category: Category;
+    @ArrayReference(() => Category, {joinColumnName: 'categories'})
+    categories: Category[];
 
     @Column({name: "content_text"})
     contentText: string;

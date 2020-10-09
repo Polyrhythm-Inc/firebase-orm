@@ -10,6 +10,7 @@ export {
     UpdateDateColumn,
     FirebaseEntity,
     NestedFirebaseEntity,
+    ArrayReference,
     ColumOption,
     RelationOption,
     DateOption,

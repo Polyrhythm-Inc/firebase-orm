@@ -8,6 +8,7 @@ import { Category } from '../examples/entity/Category';
 import { expect } from 'chai';
 import { EventEmitter } from 'events';
 import { ArticleComment } from '../examples/entity/ArticleComment';
+import { PureReference } from '..';
 
 const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
 
@@ -169,7 +170,35 @@ describe('Repository test', async () => {
 
             expect(user?.id).eq(article.user.id);
             expect(user?.articles[0].id).eq(article.id);
-        });                  
+        });     
+        
+        it("ArrayreReference", async () => {
+            const user = new User();
+            user.id = getRandomIntString();
+            user.name = 'test-user';
+            await getRepository(User).save(user);
+
+            const category = new Category();
+            category.id = getRandomIntString();
+            category.name = 'math';
+            await getRepository(Category).save(category);
+
+            const article = new Article();
+            article.id = getRandomIntString();
+            article.title = 'title';
+            article.contentText = 'bodybody';
+            article.user = user;
+            article.categories = [category];
+            await getRepository(Article).save(article);            
+
+            const result = await getRepository(Article).prepareFetcher(db => {
+                return db.where('categories', 'array-contains', PureReference(category))
+            }).fetchAll({
+                relations: ['categories']
+            });
+
+            expect(result[0].categories[0].id).eq(category.id);
+        });             
 
         it("should fetch nested relation data", async () => {
             const userId = await runTransaction(async manager => {
@@ -188,7 +217,7 @@ describe('Repository test', async () => {
                 article.title = 'title';
                 article.contentText = 'bodybody';
                 article.user = user;
-                article.category = category;
+                article.categories = [category];
 
                 await manager.getRepository(Article).save(article);
 
@@ -203,12 +232,12 @@ describe('Repository test', async () => {
             });
 
             const user = await getRepository(User).fetchOneById(userId, {
-                relations: ['articles.category', 'articles.stat']
+                relations: ['articles.categories', 'articles.stat']
             });
 
             expect(user?.articles.length).eq(1);
             expect(user?.articles[0]).haveOwnProperty('stat');
-            expect(user?.articles[0]).haveOwnProperty('category');
+            expect(user?.articles[0]).haveOwnProperty('categories');
         });
     });
 
@@ -319,7 +348,7 @@ describe('Repository test', async () => {
                     const user = result.item;
                     expect(user?.articles.length).eq(1);
                     expect(user?.articles[0]).haveOwnProperty('stat');
-                    expect(user?.articles[0]).haveOwnProperty('category');                    
+                    expect(user?.articles[0]).haveOwnProperty('categories');
                     phase++;
                     evm.emit(phase.toString(), result.item);
                     break;
@@ -337,7 +366,7 @@ describe('Repository test', async () => {
                     break;
                 }
             }, {
-                relations: ['articles.category', 'articles.stat']
+                relations: ['articles.categories', 'articles.stat']
             });
 
             // phase 1
@@ -357,7 +386,7 @@ describe('Repository test', async () => {
                 article.title = 'title';
                 article.contentText = 'bodybody';
                 article.user = user;
-                article.category = category;
+                article.categories = [category];
 
                 await manager.getRepository(Article).save(article);
 

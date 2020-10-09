@@ -249,6 +249,58 @@ await runTransaction(async manager => {
 });
 ```
 
+## ArrayReference
+
+firestoreでは、配列の形式で参照を持つことが出来ます。例として、`Artile`が複数の`Category`を持つことが出来るようにしてみます。
+
+```typescript
+import {ArrayReference} from 'firebase-orm';
+
+@FirebaseEntity('articles')
+export class Article {
+
+    ....
+    
+    @ArrayReference(() => Category, {joinColumnName: 'categories'})
+    categories: Category;
+
+    ....
+}
+```
+
+これまでの`Article`は`category_id`を`ManyToOne`として持っていましたが、その代わりに名称を`categories`に変更し、`ArrayReference`として再定義しています。配列形式で`Category`の参照を保存するときは次のようにします。
+
+### Save
+
+```typescript
+const cat1 = new Category();
+cat1.name = "category1";
+await getRepository(Category).save(cat1);
+
+const cat2 = new Category();
+cat2.name = "category2";
+await getRepository(Category).save(cat2);
+
+const article = new Article();
+article.title = 'foo';
+article.contentText = 'bar';
+article.categories = [cat1, cat2];
+
+await getRepository(Article).save(article);
+```
+
+### Fetch
+
+配列形式の参照からレコードを検査する場合は次のようにします。
+
+```typescript
+import {PureReference} from 'firebase-orm';
+
+await getRepository(Article).prepareFetcher(db => {
+    return db.where('categories', 'array-contains', PureReference(cat1))
+}).fetchAll();
+```
+
 ## onSnapShot
 
 リアルタイム同期などに用いられる`onSnapShot`もRepositoryから扱うことができます。これまでの`fetch`オペレーションと同様に、`prepareFetcher`でクエリのコンディションを指定することも可能です。`onSnapShot`はレコードの`購読を`やめるための関数を返します。
