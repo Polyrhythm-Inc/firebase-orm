@@ -65,16 +65,25 @@ export declare class _UpdateDateColumnSetting<T> implements ColumnSetting {
     propertyKey: string;
     constructor(propertyKey: string);
 }
+export declare type HookTiming = 'afterLoad' | 'beforeSave' | 'afterSave';
+export declare class _HookFunction {
+    timing: HookTiming;
+    functionName: string;
+    constructor(timing: HookTiming, functionName: string);
+}
 export declare type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
     parentEntityGetter?: () => Function;
 };
+export declare function callHook(meta: EntityMetaData, resource: any, timing: HookTiming): void;
 export declare type EntityColumnInfo = {
     columns: (ColumnSetting | JoinColumnSetting)[];
 };
-export declare type EntityMetaData = EntityMetaInfo & EntityColumnInfo;
-export declare function findMeta(Entity: Function): EntityMetaInfo & EntityColumnInfo;
+export declare type EntityMetaData = EntityMetaInfo & EntityColumnInfo & {
+    hooks: _HookFunction[];
+};
+export declare function findMeta(Entity: Function): EntityMetaData;
 export declare function PrimaryColumn(): (target: any, propertyKey: string) => void;
 export declare function Column(options?: ColumOption): (target: any, propertyKey: string) => void;
 export declare function OneToMany<T>(getEntity: () => ClassType<T>, options?: JoinOption): (target: any, propertyKey: string) => void;
@@ -83,5 +92,8 @@ export declare function ManyToOne<T>(getEntity: () => ClassType<T>, options?: Jo
 export declare function ArrayReference<T>(getEntity: () => ClassType<T>, options?: JoinOption): (target: any, propertyKey: string) => void;
 export declare function CreateDateColumn<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function UpdateDateColumn<T>(options?: DateOption): (target: any, propertyKey: string) => void;
+export declare function BeforeSave<T>(options?: DateOption): (target: any, propertyKey: string) => void;
+export declare function AfterSave<T>(options?: DateOption): (target: any, propertyKey: string) => void;
+export declare function AfterLoad<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function FirebaseEntity(tableName: string): (constructor: Function) => void;
 export declare function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string): (constructor: Function) => void;

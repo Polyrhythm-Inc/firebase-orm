@@ -1,3 +1,5 @@
+import { _getDocumentReference } from "./Repository";
+
 export declare type ClassType<T> = {
     new (...args: any[]): T;
 };
@@ -61,21 +63,51 @@ export class _UpdateDateColumnSetting<T> implements ColumnSetting {
     constructor(public propertyKey: string) {}
 }
 
+export type HookTiming = 'afterLoad'|'beforeSave'|'afterSave';
+
+export class _HookFunction  {
+    constructor(public timing: HookTiming, public functionName: string){}
+}
+
+const hookSettings: {
+    getEntity: () => Function;
+    hook: _HookFunction;
+}[] = [];
+
+function addHooks(getEntity: () => Function, hook: _HookFunction) {
+    hookSettings.push({getEntity, hook})
+}
+
 export type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
     parentEntityGetter?: () => Function;
 }
 
+export function callHook(meta: EntityMetaData, resource: any, timing: HookTiming) {
+    if(!meta.hooks) {
+        return;
+    }
+
+    for(const hook of meta.hooks) {
+        if(hook.timing === timing) {
+            if(resource[hook.functionName]) {
+                resource[hook.functionName]();
+            }
+            break;
+        }
+    }
+}
+
 export type EntityColumnInfo = {
     columns: (ColumnSetting|JoinColumnSetting)[];
 }
 
-export type EntityMetaData = EntityMetaInfo & EntityColumnInfo;
+export type EntityMetaData = EntityMetaInfo & EntityColumnInfo & {hooks: _HookFunction[]};
 
 const entityMetaInfo: EntityMetaInfo[] = [];
 const columnSettings: {getEntity: () => Function, column: ColumnSetting|JoinColumnSetting}[] = [];
-const entityMetaData: {[key: string]: EntityMetaInfo & EntityColumnInfo} = {};
+const entityMetaData: {[key: string]: EntityMetaData} = {};
 
 export function findMeta(Entity: Function) {
     if(entityMetaData[Entity.name]) {
@@ -89,8 +121,8 @@ export function findMeta(Entity: Function) {
             Entity: x.getEntity()
         }
     }).filter(x => x.Entity == Entity);
-
-    entityMetaData[Entity.name] = {...tableInfo, ...{columns: setting.map(x => x.column)}};
+    const hooks = hookSettings.filter(x => x.getEntity() == Entity).map(x => x.hook);
+    entityMetaData[Entity.name] = {...tableInfo, ...{columns: setting.map(x => x.column), hooks: hooks}};
     return entityMetaData[Entity.name];
 }
 
@@ -146,6 +178,24 @@ export function CreateDateColumn<T>(options?: DateOption) {
 export function UpdateDateColumn<T>(options?: DateOption) {
     return (target: any, propertyKey: string) => {
         addColumnSettings(() => target.constructor, new _UpdateDateColumnSetting(propertyKey));
+    }
+}
+
+export function BeforeSave<T>(options?: DateOption) {
+    return (target: any, propertyKey: string) => {
+        addHooks(() => target.constructor, new _HookFunction('beforeSave', propertyKey));
+    }
+}
+
+export function AfterSave<T>(options?: DateOption) {
+    return (target: any, propertyKey: string) => {
+        addHooks(() => target.constructor, new _HookFunction('afterSave', propertyKey));
+    }
+}
+
+export function AfterLoad<T>(options?: DateOption) {
+    return (target: any, propertyKey: string) => {
+        addHooks(() => target.constructor, new _HookFunction('afterLoad', propertyKey));
     }
 }
 

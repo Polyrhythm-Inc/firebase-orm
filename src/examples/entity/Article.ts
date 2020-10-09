@@ -1,4 +1,4 @@
-import { Column, PrimaryColumn, FirebaseEntity, ManyToOne, OneToOne, ArrayReference} from "../../Entity";
+import { Column, PrimaryColumn, FirebaseEntity, ManyToOne, OneToOne, ArrayReference, BeforeSave, AfterSave, AfterLoad} from "../../Entity";
 import { ArticleStat } from "./ArticleStat";
 import { Category } from "./Category";
 import { User } from './User';
@@ -7,6 +7,21 @@ import { User } from './User';
 export class Article {
     @PrimaryColumn()
     id: string;
+
+    @BeforeSave()
+    beforeSave() {
+        console.log('before save');
+    }
+
+    @AfterSave()
+    afterSave() {
+        console.log('after save');
+    }
+
+    @AfterLoad()
+    afterLoad() {
+        console.log('after load');
+    }
 
     @Column()
     title: string;

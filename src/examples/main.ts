@@ -16,13 +16,23 @@ import { Article } from './entity/Article';
     addDBToPool('default', db);
     use('default');
 
-    getRepository(User).prepareFetcher(db => {
-        return db.limit(5);
-    }).onSnapShot(async result => {
-        if(result.type === "added") {
-            console.log(result.item);
-        }
-    }, {
-        relations: ['articles']
-    });
+    const article = new Article();
+    article.id = '1';
+    article.title = 'foo';
+    article.contentText = 'bar';
+
+    await getRepository(Article).save(article);
+
+    console.log(article);
+
+    //await getRepository(Article).fetchAll();
+    // getRepository(User).prepareFetcher(db => {
+    //     return db.limit(5);
+    // }).onSnapShot(async result => {
+    //     if(result.type === "added") {
+    //         console.log(result.item);
+    //     }
+    // }, {
+    //     relations: ['articles']
+    // });
 })();

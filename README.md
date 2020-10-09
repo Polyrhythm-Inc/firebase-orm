@@ -369,6 +369,43 @@ await repo.save(articleComment);
 await repo.delete(articleComment);
 ```
 
+## Hooks
+
+firebase-ormでは
+
+* `beforeSave`: save前に呼ばれる
+* `afterSave`: save後に呼ばれる
+* `afterLoad`: fetch後に呼ばれる
+
+のタイミングでフックメソッドを記述することが出来ます。
+
+### Define hooks
+
+```typescript
+@FirebaseEntity('articles')
+export class Article {
+    @PrimaryColumn()
+    id: string;
+
+    @BeforeSave()
+    beforeSave() {
+        console.log('before save');
+    }
+
+    @AfterSave()
+    afterSave() {
+        console.log('after save');
+    }
+
+    @AfterLoad()
+    afterLoad() {
+        console.log('after load');
+    }
+
+    ....
+}
+```
+
 ## Client-Side
 
 クライアントサイドで`firebase-orm`を利用する際は、`firebase-orm-client`を`npm`や`yarn`でインストールします。`firebase-orm-client`のほとんどのコードベースは`firebase-orm`を共有しています。このとき、オリジナルは`firebase-orm`側にしてください。サーバーとクライアントにおける相違点は`src/type-mapper.ts`と`example`です。特に`src/type-mapper.ts`はクライアントサイド用の `firebase SDK`とサーバーサイド用の`firebase-admin SDK`の違いを吸収するための重要なファイルとなっています。内容は次です。

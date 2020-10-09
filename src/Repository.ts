@@ -1,4 +1,4 @@
-import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference } from './Entity';
+import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference, callHook } from './Entity';
 import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
@@ -21,7 +21,9 @@ export class Fetcher<T> {
         if(!unoboxed || !unoboxed[0]) {
             return null;
         }
-        return buildEntity(this.meta, unoboxed[0], this.ref, options);
+        const resource = buildEntity(this.meta, unoboxed[0], this.ref, options);
+        callHook(this.meta, resource, 'afterLoad')
+        return resource;
     }
 
     public async fetchAll(options?: FetchOption): Promise<T[]> {
@@ -32,7 +34,9 @@ export class Fetcher<T> {
         }
         const results: T[] = [];
         for(const data of docs) {
-            results.push(await buildEntity(this.meta, data, this.ref, options as any));
+            const resource = await buildEntity(this.meta, data, this.ref, options as any);
+            callHook(this.meta, resource, 'afterLoad')
+            results.push(resource);
         }
         return results;
     }
@@ -49,12 +53,14 @@ export class Fetcher<T> {
                         id: (ref.ref as DocumentReference).id
                     });                    
                 } else {
+                    const resource = await buildEntity(this.meta, unoboxed[0], ref, options as any);
+                    callHook(this.meta, resource, 'afterLoad')
                     callback({
                         type: change.type,
                         id: (ref.ref as DocumentReference).id,
-                        item: await buildEntity(this.meta, unoboxed[0], ref, options as any)
-                    });                    
-                }             
+                        item: resource
+                    });
+                }
             }
         });
         
@@ -185,9 +191,10 @@ export class Repository<T extends {id: string}> {
 
             const Entity = (resource as any).constructor;
             const meta = findMeta(Entity);
+            callHook(meta, resource, 'beforeSave');
             const params = createSavingParams(meta, resource);
-    
             await this.transaction.set(documentReference, params);
+            callHook(meta, resource, 'afterSave');
             return resource;
         } else {
             const meta = findMeta(this.Entity);
@@ -201,12 +208,14 @@ export class Repository<T extends {id: string}> {
                 _ref,
                 this.transaction
             )
+            callHook(meta, resource, 'beforeSave');
             const savingParams = createSavingParams(meta, resource);
             await ref.set(savingParams);
             if(!resource.id) {
                 resource.id = (ref.ref as DocumentReference).id;
             }
             (resource as any)[documentReferencePath] = _ref;
+            callHook(meta, resource, 'afterSave');
             return resource;
         }
     }
