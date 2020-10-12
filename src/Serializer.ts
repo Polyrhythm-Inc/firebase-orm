@@ -1,6 +1,7 @@
 import { ClassType, EntityMetaData, findMeta, findMetaFromTableName } from "./Entity";
 import { documentReferencePath } from "./EntityBuilder";
 import { getCurrentDB, getRepository, _getDocumentReference } from "./Repository";
+import { DocumentReference } from "./type-mapper";
 
 type ReferenceClue = {
     collection: string;
@@ -54,6 +55,9 @@ export class FirebaseEntitySerializer {
             }
 
             const item = object[key];
+            if(!item) {
+                continue;
+            }            
 
             if(Array.isArray(item)) {
                 serialized[key] = item.map(x => {
@@ -95,16 +99,30 @@ export class FirebaseEntityDeserializer {
             throw new Error('object is not an Entity.')
         }
 
-        if(meta.parentEntityGetter && !parentId) {
-            throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
-        }
-        
         const instance: {[key: string]: any} = new Entity();
-        const reference = getCurrentDB().collection(meta.tableName).doc((object as any).id);
-        instance[documentReferencePath] = reference;
+
+        if(meta.parentEntityGetter) {
+            if(!parentId) {
+                throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
+            }
+            const parentEntity = meta.parentEntityGetter();
+            const parentMeta = findMeta(parentEntity);
+            const reference = getCurrentDB()
+                .collection(parentMeta.tableName)
+                .doc(parentId)
+                .collection(meta.tableName)
+                .doc((object as any).id);
+            instance[documentReferencePath] = reference;
+        } else {
+            const reference = getCurrentDB().collection(meta.tableName).doc((object as any).id);
+            instance[documentReferencePath] = reference;            
+        }
 
         for(const key in object) {
             const item = (object as any)[key];
+            if(!item) {
+                continue;
+            }
             if(item[referenceCluePath]) {
                 instance[key] = plainToClass(item, parentId);
             } else if(Array.isArray(item))  {
@@ -141,7 +159,22 @@ function plainToClass(item: any, parentId?: string) {
             child[key] = item[key];
         }
     }
-    const reference = getCurrentDB().collection(meta.tableName).doc(clue.id);
+
+    let reference: DocumentReference;
+    if(meta.parentEntityGetter) {
+        if(!parentId) {
+            throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
+        }
+        const parentEntity = meta.parentEntityGetter();
+        const parentMeta = findMeta(parentEntity);
+        reference = getCurrentDB()
+                    .collection(parentMeta.tableName)
+                    .doc(parentId)
+                    .collection(meta.tableName)
+                    .doc(clue.id);
+    } else {
+        reference = getCurrentDB().collection(meta.tableName).doc(clue.id);
+    }
     child[documentReferencePath] = reference;
     return child;
 }

@@ -151,6 +151,6 @@ describe('FirebaseEntitySerializer and FirebaseEntityDeserializer test', async (
             expect(typeof serialized == "string").to.be.true;
             const article = FirebaseEntityDeserializer.deserializeFromJSONString(Article, serialized);
             expect(article.id).eq(_article.id);
-        });                
+        });
     }); 
 });
