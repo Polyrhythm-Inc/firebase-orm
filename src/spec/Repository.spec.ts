@@ -38,6 +38,7 @@ async function cleanTables() {
     await deleteAllData(Article);
     await deleteAllData(ArticleStat);
     await deleteAllData(Category);
+    await deleteAllData(ArticleComment);
 }
 
 describe('Repository test', async () => {
@@ -305,7 +306,7 @@ describe('Repository test', async () => {
 
                 const articleComment = new ArticleComment();
                 articleComment.id = getRandomIntString();
-                articleComment.text = 'hello';           
+                articleComment.text = 'hello';
                 
                 await manager.getRepository(ArticleComment, {withParentId: article.id}).save(articleComment);
 

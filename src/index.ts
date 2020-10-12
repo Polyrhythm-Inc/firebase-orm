@@ -32,4 +32,9 @@ export {
     getCurrentDB
 } from './Repository';
 
+export {
+    FirebaseEntitySerializer,
+    FirebaseEntityDeserializer
+} from './Serializer';
+
 export const PureReference = _getDocumentReference;

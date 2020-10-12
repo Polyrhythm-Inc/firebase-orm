@@ -126,6 +126,19 @@ export function findMeta(Entity: Function) {
     return entityMetaData[Entity.name];
 }
 
+export function findMetaFromTableName(tableName: string) {
+    for(const meta of Object.values(entityMetaData)) {
+        if(!meta) {
+            continue;
+        }
+        if(meta.tableName == tableName) {
+            return meta;
+        }
+    }
+    return null;
+}
+
+
 function addColumnSettings(getEntity: () => Function, setting: ColumnSetting|JoinColumnSetting) {
     columnSettings.push({
         getEntity: getEntity,

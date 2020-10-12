@@ -3,6 +3,9 @@ import { addDBToPool, getCurrentDB, getRepository, runTransaction, use } from ".
 import { User } from "./entity/User";
 import { ArticleStat } from "./entity/ArticleStat";
 import { Article } from './entity/Article';
+import { Category } from './entity/Category';
+import { FirebaseEntityDeserializer, FirebaseEntitySerializer } from '../Serializer';
+import { ArticleComment } from './entity/ArticleComment';
 
 (async () => {
     const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
@@ -16,23 +19,39 @@ import { Article } from './entity/Article';
     addDBToPool('default', db);
     use('default');
 
-    const article = new Article();
-    article.id = '1';
-    article.title = 'foo';
-    article.contentText = 'bar';
+    const [article, comment] = await runTransaction(async manager => {
+        const user = new User();
+        user.name = 'test-user';
+        await manager.getRepository(User).save(user);
 
-    await getRepository(Article).save(article);
+        const category = new Category();
+        category.name = 'math';
+        await manager.getRepository(Category).save(category);
 
-    console.log(article);
+        const article = new Article();
+        article.title = 'title';
+        article.contentText = 'bodybody';
+        article.user = user;
+        article.categories = [category];
 
-    //await getRepository(Article).fetchAll();
-    // getRepository(User).prepareFetcher(db => {
-    //     return db.limit(5);
-    // }).onSnapShot(async result => {
-    //     if(result.type === "added") {
-    //         console.log(result.item);
-    //     }
-    // }, {
-    //     relations: ['articles']
-    // });
+        await manager.getRepository(Article).save(article);
+
+        const articleStat = new ArticleStat();
+        articleStat.article = article;
+        articleStat.numOfViews = 100;
+
+        await manager.getRepository(ArticleStat).save(articleStat);
+
+        const articleComment = new ArticleComment();
+        articleComment.text = 'hello';           
+        
+        await manager.getRepository(ArticleComment, {withParentId: article.id}).save(articleComment);
+
+        return [article, articleComment];
+    });
+
+    const json = FirebaseEntitySerializer.serializeToJSON(article);
+
+    const instance = FirebaseEntityDeserializer.deserializeFromJSON(Article, json);
+    console.log(instance);
 })();

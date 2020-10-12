@@ -406,6 +406,77 @@ export class Article {
 }
 ```
 
+## Entity Serializer & Deserializer
+
+`@FirebaseEntity`は自身のプロパティとして`firestore.DocumentReference`を持つため、`JSON.stringify`が出来ません。そのため、エンティティを永続化したり、サーバーレスポンス時のシリアライズが困難となってしまいますが、この問題の回避策として`FirebaseEntitySerializer`と`FirebaseEntityDeserializer`があります。
+
+### FirebaseEntitySerializer
+
+`FirebaseEntitySerializer`は
+
+* serializeToJSON(object: any, parentId?: string)
+* serializeToJSONString(object: any, parentId?: string)
+
+を持ちます。`serializeToJSON`はエンティティをpureなjsオブジェクトにシリアライズします。一方で、`serializeToJSONString`は`serializeToJSON`の結果を文字列として返します。利用方法は次です。
+
+
+```typescript
+const article = await runTransaction(async manager => {
+    const user = new User();
+    user.id = getRandomIntString();
+    user.name = 'test-user';
+    await manager.getRepository(User).save(user);
+
+    const category = new Category();
+    category.id = getRandomIntString();
+    category.name = 'math';
+    await manager.getRepository(Category).save(category);
+
+    const article = new Article();
+    article.id = getRandomIntString();
+    article.title = 'title';
+    article.contentText = 'bodybody';
+    article.user = user;
+    article.categories = [category];
+
+    await manager.getRepository(Article).save(article);
+
+    return article;
+});
+
+const json = FirebaseEntitySerializer.serializeToJSON(article);
+const jsonString = FirebaseEntitySerializer.serializeToJSONString(article);
+```
+
+なお、ネストされたコレクションをシリアライズする場合は、第2引数に`parentId`を指定します。
+
+```typescript
+const comment = getRepository(ArticleComment, {withParentId: article.id}).fetchOneById('1');
+if(!comment) {
+    return;
+}
+const json = FirebaseEntitySerializer.serializeToJSON(comment, article.id);
+```
+
+### FirebaseEntityDeserializer
+
+`FirebaseEntityDeserializer`は`FirebaseEntitySerializer`でシリアライズされたオブジェクトかJSON文字列をデシリアライズし、エンティティのインスタンスに復元します。
+
+* deserializeFromJSON<T>(Entity: ClassType<T>, str: string, parentId?: string)
+* deserializeFromJSONString<T>(Entity: ClassType<T>, str: string, parentId?: string)
+
+を持ちます。利用方法は次です。
+
+```typescript
+const json = FirebaseEntitySerializer.serializeToJSON(article);
+const jsonString = FirebaseEntitySerializer.serializeToJSONString(article);
+
+const deserializedFromJSON = FirebaseEntityDeserializer.deserializeFromJSON(Article, json);
+const deserializedFromJSONString = FirebaseEntityDeserializer.deserializeFromJSONString(Article, jsonString);
+```
+
+ネストされたエンティティの復元には`FirebaseEntitySerializer`同様に、第3引数に`parentId`を指定します。
+
 ## Client-Side
 
 クライアントサイドで`firebase-orm`を利用する際は、`firebase-orm-client`を`npm`や`yarn`でインストールします。`firebase-orm-client`のほとんどのコードベースは`firebase-orm`を共有しています。このとき、オリジナルは`firebase-orm`側にしてください。サーバーとクライアントにおける相違点は`src/type-mapper.ts`と`example`です。特に`src/type-mapper.ts`はクライアントサイド用の `firebase SDK`とサーバーサイド用の`firebase-admin SDK`の違いを吸収するための重要なファイルとなっています。内容は次です。
