@@ -6,10 +6,10 @@ import { DocumentReference } from "./type-mapper";
 type ReferenceClue = {
     collection: string;
     id: string;
-    parent?: {
+    parent: {
         collection: string;
         id: string;        
-    }
+    }|null
 }
 
 export const referenceCluePath = "__reference_clue__";
@@ -30,7 +30,7 @@ function makeClue(obj: any, parentId?: string): ReferenceClue {
     return {
         collection: meta.tableName,
         id: obj.id,
-        parent: parentInfo
+        parent: parentInfo || null
     }
 }
 
@@ -57,7 +57,7 @@ export class FirebaseEntitySerializer {
             const item = object[key];
             if(!item) {
                 continue;
-            }            
+            }
 
             if(Array.isArray(item)) {
                 serialized[key] = item.map(x => {
