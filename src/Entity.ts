@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { _getDocumentReference } from "./Repository";
 
 export declare type ClassType<T> = {
@@ -109,9 +110,14 @@ const entityMetaInfo: EntityMetaInfo[] = [];
 const columnSettings: {getEntity: () => Function, column: ColumnSetting|JoinColumnSetting}[] = [];
 const entityMetaData: {[key: string]: EntityMetaData} = {};
 
-export function findMeta(Entity: Function) {
-    if(entityMetaData[Entity.name]) {
-        return entityMetaData[Entity.name];
+const SYMBOL_KEY = Symbol('__firebase_orm_symbol__');
+const ENTITY_META_DATA_PROP_KEY = "entityMetaData";
+
+// having side effects getter
+export function findMeta(Entity: Function): EntityMetaData {
+    const meta = Reflect.getMetadata(SYMBOL_KEY, Entity.prototype, ENTITY_META_DATA_PROP_KEY);
+    if(meta) {
+        return meta;
     }
 
     const tableInfo = entityMetaInfo.filter(x => x.Entity == Entity)[0];
@@ -122,8 +128,11 @@ export function findMeta(Entity: Function) {
         }
     }).filter(x => x.Entity == Entity);
     const hooks = hookSettings.filter(x => x.getEntity() == Entity).map(x => x.hook);
-    entityMetaData[Entity.name] = {...tableInfo, ...{columns: setting.map(x => x.column), hooks: hooks}};
-    return entityMetaData[Entity.name];
+    const metaData = {...tableInfo, ...{columns: setting.map(x => x.column), hooks: hooks}};
+
+    Reflect.defineMetadata(SYMBOL_KEY, metaData, Entity.prototype, ENTITY_META_DATA_PROP_KEY);
+    
+    return metaData;
 }
 
 export function findMetaFromTableName(tableName: string) {
@@ -137,7 +146,6 @@ export function findMetaFromTableName(tableName: string) {
     }
     return null;
 }
-
 
 function addColumnSettings(getEntity: () => Function, setting: ColumnSetting|JoinColumnSetting) {
     columnSettings.push({
