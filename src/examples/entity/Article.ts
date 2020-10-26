@@ -2,6 +2,7 @@ import { Column, PrimaryColumn, FirebaseEntity, ManyToOne, OneToOne, ArrayRefere
 import { ArticleStat } from "./ArticleStat";
 import { Category } from "./Category";
 import { User } from './User';
+import {firestore} from 'firebase-admin'
 
 @FirebaseEntity('articles')
 export class Article {
@@ -37,4 +38,7 @@ export class Article {
 
     @Column({name: "content_text"})
     contentText: string;
+
+    @Column({name: "posted_at"})
+    postedAt: firestore.Timestamp;
 }

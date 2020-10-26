@@ -1,4 +1,4 @@
-import { ClassType, EntityMetaData, findMeta, findMetaFromTableName } from "./Entity";
+import { ClassType, EntityMetaData, findMeta, findMetaFromTableName, _ColumnSetting } from "./Entity";
 import { documentReferencePath } from "./EntityBuilder";
 import { getCurrentDB, getRepository, _getDocumentReference } from "./Repository";
 import { DocumentReference } from "./type-mapper";
@@ -34,8 +34,13 @@ function makeClue(obj: any, parentId?: string): ReferenceClue {
     }
 }
 
+function hasOwnProperty<X extends {}, Y extends PropertyKey>
+  (obj: X, prop: Y): obj is X & Record<Y, unknown> {
+  return obj.hasOwnProperty(prop)
+}
+
 export class FirebaseEntitySerializer {
-    public static serializeToJSON(object: any, parentId?: string) {
+    public static serializeToJSON(object: any, parentId?: string, options?: {timeStampToString?: boolean}) {
         const meta = findMeta(object.constructor);
         if(!meta) {
             throw new Error('object is not an Entity.')
@@ -77,7 +82,11 @@ export class FirebaseEntitySerializer {
                         [referenceCluePath]: makeClue(item, object.id)
                     }
                 } else {
-                    serialized[key] = item;
+                    if(options?.timeStampToString && item.toDate) {
+                        serialized[key] = item.toDate().toString();
+                    } else {
+                        serialized[key] = item;
+                    }
                 }
             }
         }
@@ -93,7 +102,7 @@ export class FirebaseEntitySerializer {
 }
 
 export class FirebaseEntityDeserializer {
-    public static deserializeFromJSON<T extends {id: string}>(Entity: ClassType<T>, object: object, parentId?: string) {
+    public static deserializeFromJSON<T extends {id: string}>(Entity: ClassType<T>, object: object, parentId?: string, options?: {stringToTimeStamp?: boolean}) {
         const meta = findMeta(Entity);
         if(!meta) {
             throw new Error('object is not an Entity.')
@@ -131,7 +140,15 @@ export class FirebaseEntityDeserializer {
                 if(key == referenceCluePath) {
                     continue;
                 }
-                instance[key] = item;
+
+                const index = meta.columns.findIndex(x => x.propertyKey === key);
+                const column = meta.columns[index];
+                if(options?.stringToTimeStamp && column instanceof _ColumnSetting && (column.columnType as any).now) {
+                    const date = new Date(item);
+                    instance[key] = new(column.columnType as any)(Math.floor(date.getTime() / 1000), date.getMilliseconds());
+                } else {
+                    instance[key] = item;
+                }
             }
         }
         return instance as T;
@@ -145,6 +162,7 @@ export class FirebaseEntityDeserializer {
 function plainToClass(item: any, parentId?: string) {
     const clue = item[referenceCluePath] as ReferenceClue;
     const meta = findMetaFromTableName(clue.collection);
+    console.log(meta);
     if(!meta) {
         throw new Error(`Cloud not find a collection: ${clue.collection}`)
     }

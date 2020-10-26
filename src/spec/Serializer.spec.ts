@@ -21,7 +21,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-function getInitialData() {
+function getInitialData(): Promise<[Article, ArticleStat, ArticleComment]> {
     return runTransaction(async manager => {
         const user = new User();
         user.name = 'test-user';
@@ -36,6 +36,7 @@ function getInitialData() {
         article.contentText = 'bodybody';
         article.user = user;
         article.categories = [category];
+        article.postedAt = admin.firestore.Timestamp.now();
 
         await manager.getRepository(Article).save(article);
 
@@ -103,7 +104,7 @@ describe('FirebaseEntitySerializer and FirebaseEntityDeserializer test', async (
 
             const commnetJSON = FirebaseEntitySerializer.serializeToJSON(articleComment, article.id);
             expect(commnetJSON).haveOwnProperty(referenceCluePath).to.haveOwnProperty('parent');
-        });
+        });    
 
         it("should failed to serialize articleComment without parentId", async () => {
             const [_1, _2, articleComment] = await getInitialData();
@@ -151,6 +152,21 @@ describe('FirebaseEntitySerializer and FirebaseEntityDeserializer test', async (
             expect(typeof serialized == "string").to.be.true;
             const article = FirebaseEntityDeserializer.deserializeFromJSONString(Article, serialized);
             expect(article.id).eq(_article.id);
+        });
+
+        it("should serialize/deserialize article with timestamp type converts", async () => {
+            const [article, articleStat, articleComment] = await getInitialData();
+        
+            const serialized = FirebaseEntitySerializer.serializeToJSON(article, undefined, {
+                timeStampToString: true
+            });
+
+            expect(typeof serialized.postedAt).eq('string');
+
+            const deserialized = FirebaseEntityDeserializer.deserializeFromJSON(Article, serialized, undefined, {
+                stringToTimeStamp: true
+            });
+            expect(deserialized.postedAt.seconds).eq(article.postedAt.seconds);
         });
     }); 
 });

@@ -13,6 +13,7 @@ export declare type DateOption = {
 };
 export interface ColumnSetting {
     propertyKey: string;
+    columnType?: Function;
     option?: {
         name?: string;
     };
@@ -31,8 +32,9 @@ export declare class _PrimaryColumnSetting implements ColumnSetting {
 }
 export declare class _ColumnSetting implements ColumnSetting {
     propertyKey: string;
+    columnType: Function;
     option?: ColumOption | undefined;
-    constructor(propertyKey: string, option?: ColumOption | undefined);
+    constructor(propertyKey: string, columnType: Function, option?: ColumOption | undefined);
 }
 export declare class _OneToManySetting<T> implements JoinColumnSetting {
     propertyKey: string;
@@ -85,7 +87,7 @@ export declare type EntityMetaData = EntityMetaInfo & EntityColumnInfo & {
     hooks: _HookFunction[];
 };
 export declare function findMeta(Entity: Function): EntityMetaData;
-export declare function findMetaFromTableName(tableName: string): EntityMetaData | null;
+export declare function findMetaFromTableName(tableName: string): any;
 export declare function PrimaryColumn(): (target: any, propertyKey: string) => void;
 export declare function Column(options?: ColumOption): (target: any, propertyKey: string) => void;
 export declare function OneToMany<T>(getEntity: () => ClassType<T>, options?: JoinOption): (target: any, propertyKey: string) => void;

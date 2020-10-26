@@ -19,6 +19,7 @@ export type DateOption = {
 
 export interface ColumnSetting {
     propertyKey: string;
+    columnType?: Function;
     option?: {name?: string};
 }
 
@@ -37,7 +38,7 @@ export class _PrimaryColumnSetting implements ColumnSetting {
 }
 
 export class _ColumnSetting implements ColumnSetting {
-    constructor(public propertyKey: string, public option?: ColumOption) {}
+    constructor(public propertyKey: string, public columnType: Function, public option?: ColumOption) {}
 }
 
 export class _OneToManySetting<T> implements JoinColumnSetting {
@@ -136,15 +137,14 @@ export function findMeta(Entity: Function): EntityMetaData {
 }
 
 export function findMetaFromTableName(tableName: string) {
-    for(const meta of Object.values(entityMetaData)) {
-        if(!meta) {
-            continue;
-        }
-        if(meta.tableName == tableName) {
-            return meta;
-        }
+    const index = entityMetaInfo.findIndex(x => x.tableName == tableName);
+    if(index == -1) {
+        return null;
     }
-    return null;
+
+    const info = entityMetaInfo[index];
+    const meta = Reflect.getMetadata(SYMBOL_KEY, info.Entity.prototype, ENTITY_META_DATA_PROP_KEY);
+    return meta;
 }
 
 function addColumnSettings(getEntity: () => Function, setting: ColumnSetting|JoinColumnSetting) {
@@ -162,7 +162,8 @@ export function PrimaryColumn() {
 
 export function Column(options?: ColumOption) {
     return (target: any, propertyKey: string) => {
-        addColumnSettings(() => target.constructor, new _ColumnSetting(propertyKey, options));
+        const ColumnType = Reflect.getMetadata("design:type", target, propertyKey);
+        addColumnSettings(() => target.constructor, new _ColumnSetting(propertyKey, ColumnType, options));
     }
 }
 
