@@ -1,5 +1,6 @@
 import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference, callHook } from './Entity';
 import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
+import { RecordNotFoundError } from './Error';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
 export type FetchOption = {
@@ -25,6 +26,14 @@ export class Fetcher<T> {
         callHook(this.meta, resource, 'afterLoad')
         return resource;
     }
+
+    public async fetchOneOrFail(options?: FetchOption): Promise<T> {
+        const item = await this.fetchOne(options)
+        if(!item) {
+            throw new RecordNotFoundError(this.meta.Entity);
+        }
+        return item;
+    }    
 
     public async fetchAll(options?: FetchOption): Promise<T[]> {
         const result = await this.ref.get();
@@ -171,6 +180,11 @@ export class Repository<T extends {id: string}> {
         const meta = findMeta(this.Entity);
         return this.prepareFetcher(db => this.collectionReference(meta).doc(id)).fetchOne(options);
     }
+
+    public fetchOneByIdOrFail(id: string, options?: FetchOption) {
+        const meta = findMeta(this.Entity);
+        return this.prepareFetcher(db => this.collectionReference(meta).doc(id)).fetchOneOrFail(options);
+    }    
 
     public fetchAll(options?: FetchOption) {
         const meta = findMeta(this.Entity);

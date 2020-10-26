@@ -14,6 +14,7 @@ export declare class Fetcher<T> {
     private ref;
     constructor(meta: EntityMetaData, ref: FirestoreReference<T>);
     fetchOne(options?: FetchOption): Promise<T | null>;
+    fetchOneOrFail(options?: FetchOption): Promise<T>;
     fetchAll(options?: FetchOption): Promise<T[]>;
     onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): () => void;
 }
@@ -30,6 +31,7 @@ export declare class Repository<T extends {
     setTransaction(transaction: Transaction): void;
     prepareFetcher(condition: (db: CollectionReference) => ReferenceWrap): Fetcher<T>;
     fetchOneById(id: string, options?: FetchOption): Promise<T | null>;
+    fetchOneByIdOrFail(id: string, options?: FetchOption): Promise<T>;
     fetchAll(options?: FetchOption): Promise<T[]>;
     onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): () => void;
     save(resource: T): Promise<T>;

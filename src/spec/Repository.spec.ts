@@ -9,6 +9,7 @@ import { expect } from 'chai';
 import { EventEmitter } from 'events';
 import { ArticleComment } from '../examples/entity/ArticleComment';
 import { PureReference } from '..';
+import { RecordNotFoundError } from '../Error';
 
 const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
 
@@ -240,6 +241,26 @@ describe('Repository test', async () => {
             expect(user?.articles[0]).haveOwnProperty('stat');
             expect(user?.articles[0]).haveOwnProperty('categories');
         });
+
+        it("fetchOneByIdOrFail", async () => {
+            const repo = getRepository(User);
+
+            // create
+            const user = new User();
+            user.id = getRandomIntString();
+            user.name = 'test-user';
+            await repo.save(user);
+
+            // fetch
+            expect((await repo.fetchOneByIdOrFail(user.id))?.id).eq(user.id);
+
+            try {
+                await repo.fetchOneByIdOrFail("100000000000000");
+                throw new Error('never reached here.');
+            } catch(e) {
+                expect(e).instanceOf(RecordNotFoundError);
+            }
+        });   
     });
 
     context('transactions', () => {

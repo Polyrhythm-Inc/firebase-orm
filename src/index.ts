@@ -37,4 +37,8 @@ export {
     FirebaseEntityDeserializer
 } from './Serializer';
 
+export {
+    RecordNotFoundError
+} from './Error'
+
 export const PureReference = _getDocumentReference;
