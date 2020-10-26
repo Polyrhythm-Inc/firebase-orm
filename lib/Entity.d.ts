@@ -87,7 +87,7 @@ export declare type EntityMetaData = EntityMetaInfo & EntityColumnInfo & {
     hooks: _HookFunction[];
 };
 export declare function findMeta(Entity: Function): EntityMetaData;
-export declare function findMetaFromTableName(tableName: string): any;
+export declare function findMetaFromTableName(tableName: string): EntityMetaData | null;
 export declare function PrimaryColumn(): (target: any, propertyKey: string) => void;
 export declare function Column(options?: ColumOption): (target: any, propertyKey: string) => void;
 export declare function OneToMany<T>(getEntity: () => ClassType<T>, options?: JoinOption): (target: any, propertyKey: string) => void;

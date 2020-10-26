@@ -144,7 +144,22 @@ export function findMetaFromTableName(tableName: string) {
 
     const info = entityMetaInfo[index];
     const meta = Reflect.getMetadata(SYMBOL_KEY, info.Entity.prototype, ENTITY_META_DATA_PROP_KEY);
-    return meta;
+    if(meta) {
+        return meta as EntityMetaData;
+    }
+
+    const setting = columnSettings.map(x => {
+        return {
+            column: x.column,
+            Entity: x.getEntity()
+        }
+    }).filter(x => x.Entity == info.Entity);
+    const hooks = hookSettings.filter(x => x.getEntity() == info.Entity).map(x => x.hook);
+    const metaData = {...info, ...{columns: setting.map(x => x.column), hooks: hooks}};
+
+    Reflect.defineMetadata(SYMBOL_KEY, metaData, info.Entity.prototype, ENTITY_META_DATA_PROP_KEY);
+
+    return metaData;
 }
 
 function addColumnSettings(getEntity: () => Function, setting: ColumnSetting|JoinColumnSetting) {
