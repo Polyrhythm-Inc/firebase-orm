@@ -124,7 +124,7 @@ export class FirebaseEntityDeserializer {
             instance[documentReferencePath] = reference;
         } else {
             const reference = getCurrentDB().collection(meta.tableName).doc((object as any).id);
-            instance[documentReferencePath] = reference;            
+            instance[documentReferencePath] = reference;
         }
 
         for(const key in object) {
@@ -143,7 +143,7 @@ export class FirebaseEntityDeserializer {
 
                 const index = meta.columns.findIndex(x => x.propertyKey === key);
                 const column = meta.columns[index];
-                if(options?.stringToTimeStamp && column instanceof _ColumnSetting && (column.columnType as any).now) {
+                if(options?.stringToTimeStamp && column instanceof _ColumnSetting && column.columnType &&(column.columnType as any).now) {
                     const date = new Date(item);
                     instance[key] = new(column.columnType as any)(Math.floor(date.getTime() / 1000), date.getMilliseconds());
                 } else {
@@ -162,7 +162,6 @@ export class FirebaseEntityDeserializer {
 function plainToClass(item: any, parentId?: string) {
     const clue = item[referenceCluePath] as ReferenceClue;
     const meta = findMetaFromTableName(clue.collection);
-    console.log(meta);
     if(!meta) {
         throw new Error(`Cloud not find a collection: ${clue.collection}`)
     }
