@@ -1,5 +1,5 @@
 {
-  "name": "firebase-orm",
+  "name": "@Polyrhythm-Inc/firebase-orm",
   "version": "1.0.0",
   "main": "lib/index.js",
   "scripts": {
@@ -8,6 +8,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "publishConfig": { "registry": "https://npm.pkg.github.com/" },  
   "devDependencies": {
     "@types/chai": "^4.2.12",
     "@types/mocha": "^8.0.3",
