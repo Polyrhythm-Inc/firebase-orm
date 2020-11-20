@@ -77,7 +77,7 @@ export declare class _HookFunction {
 export declare type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
-    parentEntityGetter?: () => Function;
+    parentEntityGetters?: (() => Function)[];
 };
 export declare function callHook(meta: EntityMetaData, resource: any, timing: HookTiming): void;
 export declare type EntityColumnInfo = {
@@ -100,4 +100,4 @@ export declare function BeforeSave<T>(options?: DateOption): (target: any, prope
 export declare function AfterSave<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function AfterLoad<T>(options?: DateOption): (target: any, propertyKey: string) => void;
 export declare function FirebaseEntity(tableName: string): (constructor: Function) => void;
-export declare function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string): (constructor: Function) => void;
+export declare function NestedFirebaseEntity(tableName: string, ...parentEntityGetters: (() => Function)[]): (constructor: Function) => void;

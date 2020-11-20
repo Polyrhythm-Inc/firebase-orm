@@ -1,6 +1,6 @@
 import { ClassType, EntityMetaData, findMeta, findMetaFromTableName, _ColumnSetting } from "./Entity";
 import { documentReferencePath } from "./EntityBuilder";
-import { getCurrentDB, getRepository, _getDocumentReference } from "./Repository";
+import { getCurrentDB, getRepository, makeNestedCollectionReference, ParentIDMapper, _getDocumentReference } from "./Repository";
 import { DocumentReference } from "./type-mapper";
 
 type ReferenceClue = {
@@ -12,18 +12,33 @@ type ReferenceClue = {
     }|null
 }
 
+export type ParentInfo = {
+    collection: string;
+    id: string;
+    child?: ParentInfo;
+};
+
 export const referenceCluePath = "__reference_clue__";
 
-function makeClue(obj: any, parentId?: string): ReferenceClue {
+function makeClue(obj: any, parentIdMapper?: ParentIDMapper): ReferenceClue {
     const meta = findMeta(obj.constructor);
 
-    let parentInfo;
-    if(meta.parentEntityGetter && parentId) {
-        const Parent = meta.parentEntityGetter();
-        const parentMeta = findMeta(Parent);
-        parentInfo = {
-            collection: parentMeta.tableName,
-            id: parentId
+    let parentInfo: ParentInfo|null = null;
+    if(meta.parentEntityGetters && parentIdMapper) {
+        for(const getter of meta.parentEntityGetters) {
+            const Entity = getter();
+            const meta = findMeta(Entity);
+            if(parentInfo) {
+                parentInfo.child = {
+                    collection: meta.tableName,
+                    id: parentIdMapper(Entity)
+                };
+            } else {
+                parentInfo = {
+                    collection: meta.tableName,
+                    id: parentIdMapper(Entity)
+                }
+            }
         }
     }
 
@@ -40,13 +55,13 @@ function hasOwnProperty<X extends {}, Y extends PropertyKey>
 }
 
 export class FirebaseEntitySerializer {
-    public static serializeToJSON(object: any, parentId?: string, options?: {timeStampToString?: boolean}) {
+    public static serializeToJSON(object: any, parentIdMapper?: ParentIDMapper, options?: {timeStampToString?: boolean}) {
         const meta = findMeta(object.constructor);
         if(!meta) {
             throw new Error('object is not an Entity.')
         }
 
-        if(meta.parentEntityGetter && !parentId) {
+        if(meta.parentEntityGetters && !parentIdMapper) {
             throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
         }
 
@@ -91,18 +106,18 @@ export class FirebaseEntitySerializer {
             }
         }
 
-        serialized[referenceCluePath] = makeClue(object, parentId);
+        serialized[referenceCluePath] = makeClue(object, parentIdMapper);
         return serialized;
     }
 
-    public static serializeToJSONString(object: any, parentId?: string) {
-        const json = this.serializeToJSON(object, parentId);
+    public static serializeToJSONString(object: any, parentIdMapper?: ParentIDMapper) {
+        const json = this.serializeToJSON(object, parentIdMapper);
         return JSON.stringify(json);
     }
 }
 
 export class FirebaseEntityDeserializer {
-    public static deserializeFromJSON<T extends {id: string}>(Entity: ClassType<T>, object: object, parentId?: string, options?: {stringToTimeStamp?: boolean}) {
+    public static deserializeFromJSON<T extends {id: string}>(Entity: ClassType<T>, object: object, parentIdMapper?: ParentIDMapper, options?: {stringToTimeStamp?: boolean}) {
         const meta = findMeta(Entity);
         if(!meta) {
             throw new Error('object is not an Entity.')
@@ -110,17 +125,11 @@ export class FirebaseEntityDeserializer {
 
         const instance: {[key: string]: any} = new Entity();
 
-        if(meta.parentEntityGetter) {
-            if(!parentId) {
+        if(meta.parentEntityGetters) {
+            if(!parentIdMapper) {
                 throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
             }
-            const parentEntity = meta.parentEntityGetter();
-            const parentMeta = findMeta(parentEntity);
-            const reference = getCurrentDB()
-                .collection(parentMeta.tableName)
-                .doc(parentId)
-                .collection(meta.tableName)
-                .doc((object as any).id);
+            const reference = makeNestedCollectionReference(meta, parentIdMapper).doc((object as any).id);
             instance[documentReferencePath] = reference;
         } else {
             const reference = getCurrentDB().collection(meta.tableName).doc((object as any).id);
@@ -133,9 +142,9 @@ export class FirebaseEntityDeserializer {
                 continue;
             }
             if(item[referenceCluePath]) {
-                instance[key] = plainToClass(item, parentId);
+                instance[key] = plainToClass(item, parentIdMapper);
             } else if(Array.isArray(item))  {
-                instance[key] = item.map(x => plainToClass(x, parentId));
+                instance[key] = item.map(x => plainToClass(x, parentIdMapper));
             } else {
                 if(key == referenceCluePath) {
                     continue;
@@ -154,12 +163,12 @@ export class FirebaseEntityDeserializer {
         return instance as T;
     }
 
-    public static deserializeFromJSONString<T extends {id: string}>(Entity: ClassType<T>, str: string, parentId?: string) {
-        return this.deserializeFromJSON(Entity, JSON.parse(str), parentId);
+    public static deserializeFromJSONString<T extends {id: string}>(Entity: ClassType<T>, str: string, parentIdMapper?: ParentIDMapper) {
+        return this.deserializeFromJSON(Entity, JSON.parse(str), parentIdMapper);
     }
 }
 
-function plainToClass(item: any, parentId?: string) {
+function plainToClass(item: any, parentIdMapper?: ParentIDMapper) {
     const clue = item[referenceCluePath] as ReferenceClue;
     const meta = findMetaFromTableName(clue.collection);
     if(!meta) {
@@ -171,24 +180,18 @@ function plainToClass(item: any, parentId?: string) {
             continue;
         }
         if(item[key][referenceCluePath]) {
-            child[key] = FirebaseEntityDeserializer.deserializeFromJSON(meta.Entity as any, item[key], parentId)
+            child[key] = FirebaseEntityDeserializer.deserializeFromJSON(meta.Entity as any, item[key], parentIdMapper)
         } else {
             child[key] = item[key];
         }
     }
 
     let reference: DocumentReference;
-    if(meta.parentEntityGetter) {
-        if(!parentId) {
+    if(meta.parentEntityGetters) {
+        if(!parentIdMapper) {
             throw new Error(`${meta.tableName} is nested collection. So parentId have to be provided.`)
         }
-        const parentEntity = meta.parentEntityGetter();
-        const parentMeta = findMeta(parentEntity);
-        reference = getCurrentDB()
-                    .collection(parentMeta.tableName)
-                    .doc(parentId)
-                    .collection(meta.tableName)
-                    .doc(clue.id);
+        reference = makeNestedCollectionReference(meta, parentIdMapper).doc(clue.id);
     } else {
         reference = getCurrentDB().collection(meta.tableName).doc(clue.id);
     }

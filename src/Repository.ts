@@ -162,8 +162,10 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
     return savingParams;
 }
 
+export type ParentIDMapper = (Entity: Function) => string;
+
 export class Repository<T extends {id: string}> {
-    constructor(private Entity: ClassType<T>, private transaction?: Transaction, private parentId?: string) {}
+    constructor(private Entity: ClassType<T>, private transaction?: Transaction, private parentIdMapper?: ParentIDMapper) {}
 
     public setTransaction(transaction: Transaction) {
         this.transaction = transaction;
@@ -254,26 +256,37 @@ export class Repository<T extends {id: string}> {
     }
 
     private collectionReference(meta: EntityMetaData) {
-        if(this.parentId) {
-            if(!meta.parentEntityGetter) {
-                throw new Error(`${this.Entity} is not NestedFirebaseEntity`);
-            }
-            const parentMeta = findMeta(meta.parentEntityGetter());
-            return getCurrentDB()
-                    .collection(parentMeta.tableName)
-                    .doc(this.parentId)
-                    .collection(meta.tableName);
+        if(this.parentIdMapper) {
+            return makeNestedCollectionReference(meta, this.parentIdMapper);
         } else {
             return getCurrentDB().collection(meta.tableName);
         }
     }    
 }
 
+export function makeNestedCollectionReference(meta: EntityMetaData, parentIdMapper: ParentIDMapper) {
+    const db = getCurrentDB();
+    let ref: DocumentReference|null = null;
+    for(const parentEntityGetter of meta.parentEntityGetters || []) {
+        const parentMeta = findMeta(parentEntityGetter());
+        const parentId = parentIdMapper(parentMeta.Entity);
+        if(ref) {
+            ref = ref.collection(parentMeta.tableName).doc(parentId);
+        } else {
+            ref = db.collection(parentMeta.tableName).doc(parentId);
+        }
+    }
+    if(!ref) {
+        throw new Error(`${this.Entity} is not NestedFirebaseEntity`);
+    }
+    return ref.collection(meta.tableName);    
+}
+
 export function getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
-export function getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>
-export function getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+export function getRepository<T extends {id: string}>(Entity: new () => T, params: {parentIdMapper: ParentIDMapper}): Repository<T>
+export function getRepository<T extends {id: string}>(Entity: new () => T, params?: {parentIdMapper: ParentIDMapper}): Repository<T> {
     if(params) {
-        return new Repository(Entity, undefined, params.withParentId);
+        return new Repository(Entity, undefined, params.parentIdMapper);
     }
     return new Repository(Entity);
 }
@@ -282,10 +295,10 @@ export class TransactionManager {
     constructor(private transaction: Transaction) {}
 
     getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
-    getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>    
-    getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+    getRepository<T extends {id: string}>(Entity: new () => T, params: {parentIdMapper: ParentIDMapper}): Repository<T>    
+    getRepository<T extends {id: string}>(Entity: new () => T, params?: {parentIdMapper: ParentIDMapper}): Repository<T> {
         if(params) {
-            return new Repository(Entity, this.transaction, params.withParentId);
+            return new Repository(Entity, this.transaction, params.parentIdMapper);
         }
         return new Repository(Entity, this.transaction);
     }

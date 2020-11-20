@@ -1,7 +1,7 @@
 import { Column, PrimaryColumn, NestedFirebaseEntity} from "../../Entity";
 import { Article } from "./Article";
 
-@NestedFirebaseEntity(() => Article, 'article_comments')
+@NestedFirebaseEntity('article_comments', () => Article)
 export class ArticleComment {
     @PrimaryColumn()
     id: string;

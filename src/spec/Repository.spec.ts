@@ -10,6 +10,9 @@ import { EventEmitter } from 'events';
 import { ArticleComment } from '../examples/entity/ArticleComment';
 import { PureReference } from '..';
 import { RecordNotFoundError } from '../Error';
+import { ArticleCommentLike } from '../examples/entity/ArticleCommentLike';
+import { execSync } from 'child_process';
+import { findMeta } from '../Entity';
 
 const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
 
@@ -28,10 +31,7 @@ addDBToPool('default', db);
 use('default');
 
 async function deleteAllData<T extends {id: string}>(Entity: new () => T) {
-    const resources = await getRepository(Entity).fetchAll();
-    for(const r of resources) {
-        await getRepository(Entity).delete(r);
-    }    
+    execSync(`firebase firestore:delete ${findMeta(Entity).tableName} -r --project polyrhythm-dev-example -y`);
 }
 
 async function cleanTables() {
@@ -39,7 +39,6 @@ async function cleanTables() {
     await deleteAllData(Article);
     await deleteAllData(ArticleStat);
     await deleteAllData(Category);
-    await deleteAllData(ArticleComment);
 }
 
 describe('Repository test', async () => {
@@ -329,14 +328,26 @@ describe('Repository test', async () => {
                 articleComment.id = getRandomIntString();
                 articleComment.text = 'hello';
                 
-                await manager.getRepository(ArticleComment, {withParentId: article.id}).save(articleComment);
+                await manager.getRepository(ArticleComment, {parentIdMapper: (Entity) => {
+                    switch(Entity) {
+                    case Article:
+                        return article.id;
+                    }
+                    throw new Error(`Unknonwn Entity ${Entity.name}`);
+                }}).save(articleComment);
 
                 return [article, articleComment];
             });
 
             const article = result[0] as Article;
 
-            const commentRepo = getRepository(ArticleComment, {withParentId: article.id});
+            const commentRepo = getRepository(ArticleComment, {parentIdMapper: (Entity) => {
+                switch(Entity) {
+                case Article:
+                    return article.id;
+                }
+                throw new Error(`Unknonwn Entity ${Entity.name}`);
+            }});
 
             let comments = await commentRepo.fetchAll();
             expect(comments.length).eq(1);
@@ -349,11 +360,35 @@ describe('Repository test', async () => {
             comment = comments[0];
             expect(comment.text).eq("updated");
 
+            const likeRepo = await getRepository(ArticleCommentLike, {parentIdMapper: (Entity) => {
+                switch(Entity) {
+                case Article:
+                    return article.id;
+                case ArticleComment:
+                    return comment.id;
+                }
+                throw new Error(`Unknonwn Entity ${Entity.name}`);
+            }});
+
+            const like = new ArticleCommentLike();
+            like.count = 100;
+            likeRepo.save(like);
+
+            let likes = await likeRepo.fetchAll();
+            expect(likes.length).eq(1);
+
+            /**
+             * Delete
+             */
+            await likeRepo.delete(like);
+            likes = await likeRepo.fetchAll();
+            expect(likes.length).eq(0);
+
             await commentRepo.delete(comment);
             comments = await commentRepo.fetchAll();
             expect(comments.length).eq(0);
         })
-    });    
+    });
 
     context('onSnapshot', () => {
         it("should sync snap shot with relations", async () => {

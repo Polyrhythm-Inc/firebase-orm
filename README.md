@@ -333,7 +333,7 @@ const unsubscribe = getRepository(User).prepareFetcher(db => {
 ### Define Nested Entity
 
 ```typescript
-@NestedFirebaseEntity(() => Article, 'article_comments')
+@NestedFirebaseEntity('article_comments', () => Article)
 export class ArticleComment {
     @PrimaryColumn()
     id: string;
@@ -345,10 +345,14 @@ export class ArticleComment {
 
 ### CURD for Nested Entity
 
-子コレクションにアクセスする場合、`getRepository(ArticleComment, {withParentId: parentId})`のように、`getRepository`の第2引数に`withParentId`を含むオブジェクトを渡します。
+子コレクションにアクセスする場合、`getRepository(ArticleComment, {parentIdMapper: Function})`のように、`getRepository`の第2引数に`parentIdMapper`を含むオブジェクトを渡します。
+
+#### 1段ネストコレクション
 
 ```typescript
-const repo = getRepository(ArticleComment, {withParentId: article.id});
+const repo = getRepository(ArticleComment, {parentIdMapper: (_) => {
+    return article.id;
+}});
 
 const articleComment = new ArticleComment();
 articleComment.id = getRandomIntString();
@@ -367,6 +371,50 @@ await repo.save(articleComment);
 // Delete
 
 await repo.delete(articleComment);
+```
+
+#### 多段ネストコレクション
+
+コレクションが多段でネストしている場合は次のようにFirebaseEntityを設定します。
+
+```typescript
+@NestedFirebaseEntity('article_comment_likes', () => Article, () => ArticleComment)
+export class ArticleCommentLike {
+    @PrimaryColumn()
+    id: string;
+
+    @Column()
+    count: number;
+}
+```
+
+```typescript
+const repo = getRepository(ArticleCommentLike, {parentIdMapper: (Entity) => {
+    switch(Entity) {
+    case Article:
+        return article.id;
+    case ArticleComment:
+        return articleComment.id;
+    }
+    throw new Error(`Unknonwn Entity ${Entity.name}`);
+}});
+
+const articleLikes = new ArticleCommentLike();
+articleLikes.text = 'hello';  
+
+// Create
+await repo.save(articleLikes);
+
+// Fetch
+const comments = await repo.fetchOneById(articleLikes.id);
+
+// Update
+articleLikes.text = 'updated';
+await repo.save(articleLikes);
+
+// Delete
+
+await repo.delete(articleLikes);
 ```
 
 ## Hooks

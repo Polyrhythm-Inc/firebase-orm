@@ -45,7 +45,9 @@ import { ArticleComment } from './entity/ArticleComment';
         const articleComment = new ArticleComment();
         articleComment.text = 'hello';           
         
-        await manager.getRepository(ArticleComment, {withParentId: article.id}).save(articleComment);
+        await manager.getRepository(ArticleComment, {parentIdMapper: (_) => {
+            return article.id;
+        }}).save(articleComment);
 
         return [article, articleComment];
     });

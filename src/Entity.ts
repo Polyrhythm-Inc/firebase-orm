@@ -83,7 +83,7 @@ function addHooks(getEntity: () => Function, hook: _HookFunction) {
 export type EntityMetaInfo = {
     tableName: string;
     Entity: Function;
-    parentEntityGetter?: () => Function;
+    parentEntityGetters?: (() => Function)[];
 }
 
 export function callHook(meta: EntityMetaData, resource: any, timing: HookTiming) {
@@ -245,12 +245,22 @@ export function FirebaseEntity(tableName: string) {
     }
 }
 
-export function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string) {
+// export function NestedFirebaseEntity<T>(parentEntityGetter: () => ClassType<T>, tableName: string) {
+//     return (constructor: Function) => {
+//         entityMetaInfo.push({
+//             tableName: tableName,
+//             Entity: constructor,
+//             parentEntityGetter: parentEntityGetter
+//         });
+//     }
+// }
+
+export function NestedFirebaseEntity(tableName: string, ...parentEntityGetters: (() => Function)[]) {
     return (constructor: Function) => {
         entityMetaInfo.push({
             tableName: tableName,
             Entity: constructor,
-            parentEntityGetter: parentEntityGetter
+            parentEntityGetters: parentEntityGetters
         });
     }
 }
