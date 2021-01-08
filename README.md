@@ -65,6 +65,19 @@ article.contentText = 'space!';
 await repo.save(article);
 ```
 
+#### Partial fields Update
+
+```typescript
+const article = await repo.fetchOneById('1');
+if(!article) {
+    return;
+}
+
+await repo.update(article, {
+    contentText: 'space!'
+});
+```
+
 #### Delete
 
 ```typescript

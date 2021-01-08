@@ -1,5 +1,5 @@
 import { ClassType, EntityMetaData } from './Entity';
-import { ReferenceWrap, FirestoreReference } from './EntityBuilder';
+import { ReferenceWrap, FirestoreReference, QueryPartialEntity } from './EntityBuilder';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType } from './type-mapper';
 export declare type FetchOption = {
     relations: string[];
@@ -36,6 +36,7 @@ export declare class Repository<T extends {
     fetchAll(options?: FetchOption): Promise<T[]>;
     onSnapShot(callback: (result: OnsnapShotResult<T>) => Promise<void>, options?: FetchOption): () => void;
     save(resource: T): Promise<T>;
+    update(resource: T, params: QueryPartialEntity<T>): Promise<T>;
     delete(resourceOrId: string | T): Promise<void>;
     private collectionReference;
 }

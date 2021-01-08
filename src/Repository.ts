@@ -1,5 +1,5 @@
 import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference, callHook } from './Entity';
-import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
+import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath, QueryPartialEntity } from './EntityBuilder';
 import { RecordNotFoundError } from './Error';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
@@ -162,6 +162,22 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
     return savingParams;
 }
 
+function createUpdatingParams(meta: EntityMetaData, resource: any, paramsForUpdate: any) {
+    const copied = {...resource};
+    Object.assign(copied, paramsForUpdate);
+    const savingParams = createSavingParams(meta, copied);
+
+    const updatingParams: ReturnType<typeof createSavingParams> = {}
+    const savingKeys = Object.keys(paramsForUpdate);
+    for(const key in savingParams) {
+        if(!savingKeys.includes(key)) {
+            continue;
+        }
+        updatingParams[key] = savingParams[key];
+    }
+    return updatingParams;
+}
+
 export type ParentIDMapper = (Entity: Function) => string;
 
 export class Repository<T extends {id: string}> {
@@ -234,6 +250,43 @@ export class Repository<T extends {id: string}> {
             callHook(meta, resource, 'afterSave');
             return resource;
         }
+    }
+
+    public async update(resource: T, params: QueryPartialEntity<T>): Promise<T> {
+        const documentReference = _getDocumentReference(resource);
+        if(!documentReference) {
+            throw new Error('Can not update the resource due to non existed resource on firestore.');
+        }
+
+        if(documentReference.id !== resource.id) {
+            throw new Error('The resource is broken.');
+        }
+
+        if(this.transaction && documentReference) {
+            const Entity = (resource as any).constructor;
+            const meta = findMeta(Entity);
+            callHook(meta, [resource, params], 'beforeSave');
+            const updatingParams = createUpdatingParams(meta, resource, params);
+            await this.transaction.update(documentReference, updatingParams);
+            Object.assign(resource, params);
+            callHook(meta, resource, 'afterSave');
+            return resource;
+        } else {
+            const meta = findMeta(this.Entity);
+
+            const ref = new FirestoreReference(
+                this.collectionReference(meta).doc(resource.id),
+                this.transaction
+            )
+
+            const updatingParams = createUpdatingParams(meta, resource, params);
+
+            callHook(meta, [resource, params], 'beforeSave');
+            await ref.update(updatingParams);
+            Object.assign(resource, params);
+            callHook(meta, resource, 'afterSave');
+        }
+        return resource;
     }
 
     public async delete(resourceOrId: string|T) {

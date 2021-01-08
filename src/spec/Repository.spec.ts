@@ -77,16 +77,20 @@ describe('Repository test', async () => {
             const user = new User();
             user.id = getRandomIntString();
             user.name = 'test-user';
+            user.age = 30;
             await repo.save(user);
 
             // fetch
             expect((await repo.fetchOneById(user.id))?.id).eq(user.id);
 
-            // update
-            user.name = 'updated';
-            await repo.save(user);
+            // partial fields update
+            await repo.update(user, {
+                name: 'updated'
+            });
 
-            expect((await repo.fetchOneById(user.id))?.name).eq('updated');
+            const fetched = await repo.fetchOneById(user.id);
+            expect(fetched?.name).eq('updated');
+            expect(fetched?.age).eq(30); // keep old
 
             // delete
             await repo.delete(user);
@@ -263,6 +267,26 @@ describe('Repository test', async () => {
     });
 
     context('transactions', () => {
+        it("should update resource partially", async () => {
+            const user = await runTransaction(async manager => {
+                const user = new User();
+                user.id = getRandomIntString();
+                user.name = 'test-user';
+                user.age = 30;
+                await manager.getRepository(User).save(user);
+
+                await manager.getRepository(User).update(user, {
+                    name: 'updated'
+                })
+
+                return user;
+            });
+
+            const fetched = await getRepository(User).fetchOneById(user.id);
+            expect(fetched?.name).eq('updated');
+            expect(fetched?.age).eq(30); // keep old
+        });
+
         it("should rollback creation", async () => {
             try {
                 await runTransaction(async manager => {
@@ -372,7 +396,7 @@ describe('Repository test', async () => {
 
             const like = new ArticleCommentLike();
             like.count = 100;
-            likeRepo.save(like);
+            await likeRepo.save(like);
 
             let likes = await likeRepo.fetchAll();
             expect(likes.length).eq(1);
