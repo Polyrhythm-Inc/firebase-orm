@@ -24,6 +24,7 @@ export declare class FirestoreReference<T> {
     constructor(ref: ReferenceWrap, transaction?: FirebaseFirestore.Transaction | undefined);
     get(): Promise<SnapShotBox>;
     set(params: QueryPartialEntity<T>): Promise<void>;
+    update(params: QueryPartialEntity<T>): Promise<void>;
 }
 export declare class RelationNotFoundError extends Error {
     relation: string;

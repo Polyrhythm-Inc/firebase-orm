@@ -88,6 +88,21 @@ export class FirestoreReference<T> {
 
         throw new Error('reference should be DocumentReference');
     }
+
+    public async update(params: QueryPartialEntity<T>) {
+        if(this.ref instanceof firestore.DocumentReference || isBrowserOptimizedDocumentReference(this.ref)) {
+            const ref = this.ref as DocumentReference;
+            if(this.transaction) {
+                await this.transaction.update(ref, params);
+                return;
+            } else {
+                await ref.update(params);
+                return;
+            }
+        }
+
+        throw new Error('reference should be DocumentReference');
+    }    
 }
 
 export class RelationNotFoundError extends Error {

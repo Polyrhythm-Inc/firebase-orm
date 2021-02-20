@@ -1,5 +1,5 @@
 import { findMeta, ClassType, EntityMetaData, _ManyToOneSetting, _OneToManySetting, _OneToOneSetting, _ColumnSetting, _ArrayReference, callHook } from './Entity';
-import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath } from './EntityBuilder';
+import { buildEntity, ReferenceWrap, FirestoreReference, documentReferencePath, QueryPartialEntity } from './EntityBuilder';
 import { RecordNotFoundError } from './Error';
 import { Firestore, CollectionReference, DocumentReference, Transaction, DocumentChangeType, Query } from './type-mapper';
 
@@ -162,8 +162,26 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
     return savingParams;
 }
 
+function createUpdatingParams(meta: EntityMetaData, resource: any, paramsForUpdate: any) {
+    const copied = {...resource};
+    Object.assign(copied, paramsForUpdate);
+    const savingParams = createSavingParams(meta, copied);
+
+    const updatingParams: ReturnType<typeof createSavingParams> = {}
+    const savingKeys = Object.keys(paramsForUpdate);
+    for(const key in savingParams) {
+        if(!savingKeys.includes(key)) {
+            continue;
+        }
+        updatingParams[key] = savingParams[key];
+    }
+    return updatingParams;
+}
+
+export type ParentIDMapper = (Entity: Function) => string;
+
 export class Repository<T extends {id: string}> {
-    constructor(private Entity: ClassType<T>, private transaction?: Transaction, private parentId?: string) {}
+    constructor(private Entity: ClassType<T>, private transaction?: Transaction, private parentIdMapper?: ParentIDMapper) {}
 
     public setTransaction(transaction: Transaction) {
         this.transaction = transaction;
@@ -234,6 +252,43 @@ export class Repository<T extends {id: string}> {
         }
     }
 
+    public async update(resource: T, params: QueryPartialEntity<T>): Promise<T> {
+        const documentReference = _getDocumentReference(resource);
+        if(!documentReference) {
+            throw new Error('Can not update the resource due to non existed resource on firestore.');
+        }
+
+        if(documentReference.id !== resource.id) {
+            throw new Error('The resource is broken.');
+        }
+
+        if(this.transaction && documentReference) {
+            const Entity = (resource as any).constructor;
+            const meta = findMeta(Entity);
+            callHook(meta, [resource, params], 'beforeSave');
+            const updatingParams = createUpdatingParams(meta, resource, params);
+            await this.transaction.update(documentReference, updatingParams);
+            Object.assign(resource, params);
+            callHook(meta, resource, 'afterSave');
+            return resource;
+        } else {
+            const meta = findMeta(this.Entity);
+
+            const ref = new FirestoreReference(
+                this.collectionReference(meta).doc(resource.id),
+                this.transaction
+            )
+
+            const updatingParams = createUpdatingParams(meta, resource, params);
+
+            callHook(meta, [resource, params], 'beforeSave');
+            await ref.update(updatingParams);
+            Object.assign(resource, params);
+            callHook(meta, resource, 'afterSave');
+        }
+        return resource;
+    }
+
     public async delete(resourceOrId: string|T) {
         const ref = _getDocumentReference(resourceOrId);
         if(ref) {
@@ -254,26 +309,37 @@ export class Repository<T extends {id: string}> {
     }
 
     private collectionReference(meta: EntityMetaData) {
-        if(this.parentId) {
-            if(!meta.parentEntityGetter) {
-                throw new Error(`${this.Entity} is not NestedFirebaseEntity`);
-            }
-            const parentMeta = findMeta(meta.parentEntityGetter());
-            return getCurrentDB()
-                    .collection(parentMeta.tableName)
-                    .doc(this.parentId)
-                    .collection(meta.tableName);
+        if(this.parentIdMapper) {
+            return makeNestedCollectionReference(meta, this.parentIdMapper);
         } else {
             return getCurrentDB().collection(meta.tableName);
         }
     }    
 }
 
+export function makeNestedCollectionReference(meta: EntityMetaData, parentIdMapper: ParentIDMapper) {
+    const db = getCurrentDB();
+    let ref: DocumentReference|null = null;
+    for(const parentEntityGetter of meta.parentEntityGetters || []) {
+        const parentMeta = findMeta(parentEntityGetter());
+        const parentId = parentIdMapper(parentMeta.Entity);
+        if(ref) {
+            ref = ref.collection(parentMeta.tableName).doc(parentId);
+        } else {
+            ref = db.collection(parentMeta.tableName).doc(parentId);
+        }
+    }
+    if(!ref) {
+        throw new Error(`${this.Entity} is not NestedFirebaseEntity`);
+    }
+    return ref.collection(meta.tableName);    
+}
+
 export function getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
-export function getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>
-export function getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+export function getRepository<T extends {id: string}>(Entity: new () => T, params: {parentIdMapper: ParentIDMapper}): Repository<T>
+export function getRepository<T extends {id: string}>(Entity: new () => T, params?: {parentIdMapper: ParentIDMapper}): Repository<T> {
     if(params) {
-        return new Repository(Entity, undefined, params.withParentId);
+        return new Repository(Entity, undefined, params.parentIdMapper);
     }
     return new Repository(Entity);
 }
@@ -282,10 +348,10 @@ export class TransactionManager {
     constructor(private transaction: Transaction) {}
 
     getRepository<T extends {id: string}>(Entity: new () => T): Repository<T>
-    getRepository<T extends {id: string}>(Entity: new () => T, params: {withParentId: string}): Repository<T>    
-    getRepository<T extends {id: string}>(Entity: new () => T, params?: {withParentId: string}): Repository<T> {
+    getRepository<T extends {id: string}>(Entity: new () => T, params: {parentIdMapper: ParentIDMapper}): Repository<T>    
+    getRepository<T extends {id: string}>(Entity: new () => T, params?: {parentIdMapper: ParentIDMapper}): Repository<T> {
         if(params) {
-            return new Repository(Entity, this.transaction, params.withParentId);
+            return new Repository(Entity, this.transaction, params.parentIdMapper);
         }
         return new Repository(Entity, this.transaction);
     }
