@@ -103,7 +103,7 @@ function createSavingParams(meta: EntityMetaData, resource: any) {
     const savingParams: {[key: string]: any} = {};
 
     for(const key in resource) {
-        if(!resource[key]) {
+        if(resource[key] === undefined) {
             continue;
         }
         const column = meta.columns.filter(x => key === x.propertyKey)[0];
