@@ -1,25 +1,23 @@
 import 'mocha';
 import * as admin from 'firebase-admin';
-import { addDBToPool, getRepository, runTransaction, use } from "../Repository";
+import { addDBToPool, runTransaction, use } from "../Repository";
 import { User } from '../examples/entity/User';
 import { ArticleStat } from '../examples/entity/ArticleStat';
 import { Article } from '../examples/entity/Article';
 import { Category } from '../examples/entity/Category';
 import { expect } from 'chai';
-import { EventEmitter } from 'events';
 import { ArticleComment } from '../examples/entity/ArticleComment';
-import { PureReference } from '..';
 import { FirebaseEntityDeserializer, FirebaseEntitySerializer, referenceCluePath } from '../Serializer';
 import { documentReferencePath } from '../EntityBuilder';
 import { findMeta } from '../Entity';
 import { execSync } from 'child_process';
 import { ArticleCommentLike } from '../examples/entity/ArticleCommentLike';
 
-const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
+const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-272223a77d.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://polyrhythm-dev-example.firebaseio.com"
+    databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
 });
 
 const db = admin.firestore();

@@ -14,24 +14,24 @@ import { ArticleCommentLike } from '../examples/entity/ArticleCommentLike';
 import { execSync } from 'child_process';
 import { findMeta } from '../Entity';
 
-const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
+const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-272223a77d.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://polyrhythm-dev-example.firebaseio.com"
+    databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
 });
 
 const db = admin.firestore();
 
 function getRandomIntString(max: number = 1000) {
     return Math.floor(Math.random() * Math.floor(max)).toString();
-  }
+}
 
 addDBToPool('default', db);
 use('default');
 
 async function deleteAllData<T extends {id: string}>(Entity: new () => T) {
-    execSync(`firebase firestore:delete ${findMeta(Entity).tableName} -r --project polyrhythm-dev-example -y`);
+    execSync(`firebase firestore:delete ${findMeta(Entity).tableName} -r --project ${serviceAccount.project_id} -y`);
 }
 
 async function cleanTables() {
@@ -95,6 +95,23 @@ describe('Repository test', async () => {
             // delete
             await repo.delete(user);
             expect((await repo.fetchOneById(user.id))).to.be.null;
+        });
+
+        it("should update value as null", async () => {
+            const repo = getRepository(User);
+
+            // create
+            const user = new User();
+            user.id = getRandomIntString();
+            user.name = 'test-user';
+            user.age = 30;
+            user.description = "this is test";
+            await repo.save(user);
+
+            await repo.update(user, {
+                description: null
+            });
+            expect(user.description).to.be.null;
         });
     });
 
@@ -486,7 +503,7 @@ describe('Repository test', async () => {
 
             evm.on('3', async (user: User) => {
                 await getRepository(User).delete(user);
-            });
+            }); 
         });
     });
 });

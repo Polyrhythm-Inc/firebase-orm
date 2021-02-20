@@ -8,11 +8,11 @@ import { FirebaseEntityDeserializer, FirebaseEntitySerializer } from '../Seriali
 import { ArticleComment } from './entity/ArticleComment';
 
 (async () => {
-    const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-e1dd189e07.json");
+    const serviceAccount = require("../../polyrhythm-dev-example-firebase-adminsdk-ed17d-272223a77d.json");
 
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        databaseURL: "https://polyrhythm-dev-example.firebaseio.com"
+        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
     });
     const db = admin.firestore();
 

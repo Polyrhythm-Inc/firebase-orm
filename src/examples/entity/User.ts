@@ -12,6 +12,9 @@ export class User {
     @Column()
     age: number;
 
+    @Column()
+    description?: string|null;
+
     @OneToMany(() => Article, {relationColumn: 'user_id'})
     articles: Article[];
 }
