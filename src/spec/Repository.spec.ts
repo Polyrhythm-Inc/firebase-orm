@@ -1,6 +1,6 @@
 import 'mocha';
 import * as admin from 'firebase-admin';
-import { addDBToPool, getRepository, runTransaction, use } from "../Repository";
+import { addDBToPool, getRepository, Repository, runTransaction, takeDBFromPool, use } from "../Repository";
 import { User } from '../examples/entity/User';
 import { ArticleStat } from '../examples/entity/ArticleStat';
 import { Article } from '../examples/entity/Article';
@@ -430,6 +430,50 @@ describe('Repository test', async () => {
             expect(comments.length).eq(0);
         })
     });
+
+    context('Multiple connections', () => {
+        async function saveTestData(repos: Repository<User>[]) {
+            let i = 1;
+            for(const repo of repos) {
+                let user = new User();
+                user.id = getRandomIntString();
+                user.name = 'test-user' + i.toString();
+                user.age = 30;
+                await repo.save(user);
+                i++;
+            }
+        }
+
+        it("Should perform read/write with specified db", async () => {
+            addDBToPool('con1', db);
+            addDBToPool('con2', db);
+
+            const repo1 = getRepository(User, undefined, takeDBFromPool('con1'));
+            const repo2 = getRepository(User, undefined, takeDBFromPool('con2'));
+
+            await saveTestData([repo1, repo2]);
+
+            const results = await Promise.all([
+                repo1.fetchAll(),
+                repo2.fetchAll()
+            ]);
+
+            results.forEach(r => {
+                expect(r.length).eq(2)
+            });
+        });
+
+        it("Should perform write with specified db in transaction", async () => {
+            addDBToPool('con1', db);
+            addDBToPool('con2', db);
+
+            await runTransaction(async manager => {
+                const repo1 = manager.getRepository(User, undefined, takeDBFromPool('con1'));
+                const repo2 = manager.getRepository(User, undefined, takeDBFromPool('con2'));
+                await saveTestData([repo1, repo2]);
+            });
+        });
+    });    
 
     context('onSnapshot', () => {
         it("should sync snap shot with relations", async () => {
